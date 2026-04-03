@@ -1,17 +1,19 @@
 /**
  * OPTOPROFIT ENGINE - Line Balancing Optimizer
- * Implements "Longest Task First" (LTF) and "Most Following Tasks" (MFT) Heuristics.
+ * Aligned with TEIRAC Industrial Standards.
  */
 
-/* ─── Takt Time ─── */
+/* ─── Cycle Time (C) ─── */
+// C = Available Production Time / Daily Demand
 export const calculateTaktTime = (availableTime, demand) => {
   if (!demand || demand <= 0) return 0;
   return availableTime / demand;
 };
 
-/* ─── Theoretical Minimum Workstations ─── */
+/* ─── Theoretical Minimum Workstations (Nmin) ─── */
+// Nmin = Sum(t) / C
 export const calculateNmin = (tasks, taktTime) => {
-  if (!taktTime) return 0;
+  if (!taktTime || taktTime <= 0) return 0;
   const totalTime = tasks.reduce((sum, t) => sum + t.time, 0);
   return Math.ceil(totalTime / taktTime);
 };
@@ -30,12 +32,12 @@ export const detectCircularDependency = (tasks) => {
     recStack.add(nodeId);
     const neighbors = graph[nodeId] || [];
     for (const neighbor of neighbors) {
-      if (!graph.hasOwnProperty(neighbor)) continue;          // skip unknown IDs
+      if (!Object.prototype.hasOwnProperty.call(graph, neighbor)) continue;
       if (recStack.has(neighbor)) {
         errors.push({
           taskId: nodeId,
           cycle: [...path, nodeId, neighbor],
-          message: `Circular Dependency! Task ${nodeId} relies on Task ${neighbor}, which relies on Task ${nodeId} via ${path.join(' → ')}.`
+          message: `Circular Dependency! Task ${nodeId} relies on Task ${neighbor}, which relies on Task ${nodeId}.`
         });
         return;
       }
@@ -48,9 +50,8 @@ export const detectCircularDependency = (tasks) => {
   return errors;
 };
 
-/* ─── Count Following Tasks (for MFT heuristic) ─── */
-const countFollowers = (taskId, tasks) => {
-  // Build a forward adjacency: for each task, who depends on it?
+/* ─── Count Following Tasks (MFT heuristic) ─── */
+const getFollowers = (taskId, tasks) => {
   const forward = {};
   tasks.forEach(t => { forward[t.id] = []; });
   tasks.forEach(t => {
@@ -58,7 +59,6 @@ const countFollowers = (taskId, tasks) => {
       if (forward[pId]) forward[pId].push(t.id);
     });
   });
-  // BFS to count all transitive followers
   const visited = new Set();
   const queue = [taskId];
   while (queue.length > 0) {
@@ -67,21 +67,32 @@ const countFollowers = (taskId, tasks) => {
       if (!visited.has(fId)) { visited.add(fId); queue.push(fId); }
     });
   }
-  return visited.size;
+  return visited;
+};
+
+/* ─── Ranked Positional Weight (RPW) Calculation ─── */
+const calculateRPW = (taskId, tasks) => {
+  const followers = getFollowers(taskId, tasks);
+  const task = tasks.find(t => t.id === taskId);
+  const followerTime = tasks
+    .filter(t => followers.has(t.id))
+    .reduce((sum, t) => sum + t.time, 0);
+  return task.time + followerTime;
 };
 
 /* ─── Main Optimization Engine ─── */
 export const runOptimization = (tasks, taktTime, heuristic = 'LTF') => {
   if (!taktTime || taktTime <= 0 || tasks.length === 0) {
-    return { stations: [], efficiency: '0.00', nActual: 0, totalIdleTime: 0 };
+    return { stations: [], efficiency: '0.00', nActual: 0, totalIdleTime: 0, balanceDelay: '0.00' };
   }
 
-  // Sort based on chosen heuristic
+  // Heuristic Sorting
   let sortedTasks;
   if (heuristic === 'MFT') {
-    sortedTasks = [...tasks].sort((a, b) => countFollowers(b.id, tasks) - countFollowers(a.id, tasks));
+    sortedTasks = [...tasks].sort((a, b) => getFollowers(b.id, tasks).size - getFollowers(a.id, tasks).size);
+  } else if (heuristic === 'RPW') {
+    sortedTasks = [...tasks].sort((a, b) => calculateRPW(b.id, tasks) - calculateRPW(a.id, tasks));
   } else {
-    // LTF (default)
     sortedTasks = [...tasks].sort((a, b) => b.time - a.time);
   }
 
@@ -96,39 +107,47 @@ export const runOptimization = (tasks, taktTime, heuristic = 'LTF') => {
   while (unassigned.length > 0 && safetyCounter < maxIterations) {
     safetyCounter++;
 
-    // Find tasks whose predecessors are all assigned
     const candidates = unassigned.filter(t => {
       if (!t.predecessors || t.predecessors.length === 0 || t.predecessors[0] === 'None' || t.predecessors[0] === '') return true;
       return t.predecessors.every(pId => assignedIds.has(pId));
     });
 
     if (candidates.length === 0) {
-      // All remaining tasks have unmet predecessors → push current station, start new
       if (currentStation.tasks.length > 0) {
         stations.push(currentStation);
         currentStation = { tasks: [], time: 0 };
-      } else {
-        // True deadlock (circular dependency) — break
-        break;
-      }
+      } else break;
       continue;
     }
 
-    // Re-sort candidates by heuristic priority
     let sortedCandidates;
     if (heuristic === 'MFT') {
-      sortedCandidates = [...candidates].sort((a, b) => countFollowers(b.id, tasks) - countFollowers(a.id, tasks));
+      sortedCandidates = [...candidates].sort((a, b) => getFollowers(b.id, tasks).size - getFollowers(a.id, tasks).size);
+    } else if (heuristic === 'RPW') {
+      sortedCandidates = [...candidates].sort((a, b) => calculateRPW(b.id, tasks) - calculateRPW(a.id, tasks));
     } else {
       sortedCandidates = [...candidates].sort((a, b) => b.time - a.time);
     }
 
-    // Try to find a candidate that fits in the current station
     let bestTask = null;
     for (const task of sortedCandidates) {
-      if (currentStation.time + task.time <= taktTime) {
-        bestTask = task;
-        break;
+      const fitsTime = (currentStation.time + task.time <= taktTime);
+      if (!fitsTime) continue;
+
+      const stationPosZones = currentStation.tasks.map(t => t.zoning).filter(z => z && z.startsWith('Positive'));
+      if (task.zoning && task.zoning.startsWith('Positive')) {
+        if (stationPosZones.length > 0 && !stationPosZones.includes(task.zoning)) continue;
+      } else {
+        if (stationPosZones.length > 0) continue; 
       }
+
+      const stationNegZones = currentStation.tasks.map(t => t.zoning).filter(z => z && z.startsWith('Negative'));
+      if (task.zoning && task.zoning.startsWith('Negative')) {
+        if (stationNegZones.length > 0 && stationNegZones.some(z => z !== task.zoning)) continue;
+      }
+
+      bestTask = task;
+      break;
     }
 
     if (bestTask) {
@@ -137,31 +156,30 @@ export const runOptimization = (tasks, taktTime, heuristic = 'LTF') => {
       assignedIds.add(bestTask.id);
       unassigned = unassigned.filter(t => t.id !== bestTask.id);
     } else {
-      // Current station is full — start new one
       stations.push(currentStation);
       currentStation = { tasks: [], time: 0 };
     }
   }
 
-  // Push the final station
   if (currentStation.tasks.length > 0) {
     stations.push(currentStation);
   }
 
-  // Calculate efficiency based on actual achieved bottleneck cycle time
+  /* ─── Mathematical Performance Metrics (PDF Aligned) ─── */
   const totalTaskTime = tasks.reduce((sum, t) => sum + t.time, 0);
-  const actualCycleTime = stations.length > 0 ? Math.max(...stations.map(s => s.time)) : 0;
+  const nActual = stations.length;
   
-  // Real efficiency uses the bottle neck time, not the target takt time
-  const totalCycleTimeUsed = stations.length * actualCycleTime;
-  const efficiency = totalCycleTimeUsed > 0 ? (totalTaskTime / totalCycleTimeUsed) * 100 : 0;
+  const efficiency = nActual > 0 ? (totalTaskTime / (nActual * taktTime)) * 100 : 0;
+  const totalIdleTime = (nActual * taktTime) - totalTaskTime;
+  const balanceDelay = 100 - efficiency;
 
   return {
     stations,
     efficiency: efficiency.toFixed(2),
-    nActual: stations.length,
-    actualCycleTime, // Bottleneck cycle time
-    totalIdleTime: totalCycleTimeUsed > 0 ? totalCycleTimeUsed - totalTaskTime : 0,
+    balanceDelay: balanceDelay.toFixed(2),
+    nActual,
+    actualCycleTime: stations.length > 0 ? Math.max(...stations.map(s => s.time)) : 0,
+    totalIdleTime: totalIdleTime > 0 ? totalIdleTime : 0,
     totalTaskTime
   };
 };

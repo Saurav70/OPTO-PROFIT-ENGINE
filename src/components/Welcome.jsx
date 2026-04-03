@@ -1,12 +1,10 @@
-import React, { useState } from 'react';
+import React from 'react';
 
 const Welcome = ({ onContinue }) => {
-  const [showLogin, setShowLogin] = useState(false);
-
   return (
     <div style={{ 
       width: '100vw', height: '100vh', display: 'flex',
-      background: 'radial-gradient(ellipse at 70% 30%, #0a192f 0%, #050a14 100%)',
+      background: 'transparent', // Let the body's dynamic gradient show through
       overflow: 'hidden', position: 'relative'
     }}>
       {/* Decorative grid lines */}
@@ -15,14 +13,14 @@ const Welcome = ({ onContinue }) => {
       {/* Brand Side */}
       <div style={{ 
         flex: 1, padding: '6rem', display: 'flex', flexDirection: 'column', justifyContent: 'center',
-        background: 'linear-gradient(135deg, rgba(100, 255, 218, 0.02) 0%, transparent 100%)',
+        background: 'linear-gradient(135deg, rgba(2, 132, 199, 0.05) 0%, transparent 100%)',
         position: 'relative', zIndex: 1
       }}>
         {/* TEIRAC Logo */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '3rem' }}>
           <div style={{
             width: '48px', height: '48px',
-            background: 'linear-gradient(135deg, #007d8a, #64ffda)',
+            background: 'linear-gradient(135deg, var(--accent-primary), #38bdf8)',
             borderRadius: '10px', boxShadow: 'var(--shadow-glow)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontWeight: 900, fontSize: '0.9rem', color: '#fff', letterSpacing: '1px'
@@ -60,12 +58,12 @@ const Welcome = ({ onContinue }) => {
 
       {/* Login Card Side */}
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', zIndex: 1 }}>
-        <div className="glass" style={{ width: '420px', padding: '3rem', boxShadow: '0 25px 60px -12px rgba(0, 0, 0, 0.6)' }}>
+        <div className="glass" style={{ width: '420px', padding: '3rem', boxShadow: '0 25px 60px -12px rgba(2, 132, 199, 0.15)' }}>
           {/* Card Logo */}
           <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginBottom: '1.5rem' }}>
               <div style={{
-                width: '32px', height: '32px', background: 'linear-gradient(135deg, #007d8a, #64ffda)',
+                width: '32px', height: '32px', background: 'linear-gradient(135deg, var(--accent-primary), #38bdf8)',
                 borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontWeight: 900, fontSize: '0.6rem', color: '#fff'
               }}>TE</div>

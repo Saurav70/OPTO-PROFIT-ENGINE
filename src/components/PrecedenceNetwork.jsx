@@ -1,16 +1,133 @@
 import React, { useMemo } from 'react';
-import { Info } from 'lucide-react';
+import { 
+  ReactFlow, 
+  Background, 
+  Controls, 
+  Panel,
+  Handle,
+  Position,
+  BaseEdge,
+  getBezierPath,
+} from '@xyflow/react';
+import { Info, PlayCircle, Cpu, AlertTriangle } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { detectCircularDependency } from '../utils/optimizer';
+
+// Custom Edge Component with Flow Particles
+const FlowEdge = ({
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  style = {},
+  markerEnd,
+  data
+}) => {
+  const [edgePath] = getBezierPath({
+    sourceX,
+    sourceY,
+    sourcePosition,
+    targetX,
+    targetY,
+    targetPosition,
+  });
+
+  const isCycle = data?.isCycle;
+
+  return (
+    <>
+      <BaseEdge path={edgePath} markerEnd={markerEnd} style={{ ...style, strokeWidth: 2, opacity: 0.3 }} />
+      {/* Animated Particle Path */}
+      <path
+        d={edgePath}
+        fill="none"
+        stroke={isCycle ? '#ef4444' : '#0d9488'}
+        strokeWidth={isCycle ? 4 : 3}
+        strokeDasharray="4, 16"
+        style={{
+          filter: isCycle ? 'drop-shadow(0 0 5px #ef4444)' : 'none',
+        }}
+      >
+        <animate
+          attributeName="stroke-dashoffset"
+          from="20"
+          to="0"
+          dur="1s"
+          repeatCount="indefinite"
+        />
+      </path>
+    </>
+  );
+};
+
+// Custom Node Component
+const TaskNode = ({ data }) => {
+  const { id, name, time, isError } = data;
+  return (
+    <div style={{ 
+      width: '240px', 
+      height: '80px', 
+      background: 'var(--card-bg)', 
+      border: `1px solid ${isError ? 'var(--accent-danger)' : 'var(--border-color)'}`, 
+      borderLeft: `5px solid ${isError ? 'var(--accent-danger)' : 'var(--accent-primary)'}`,
+      borderRadius: '8px', 
+      padding: '14px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '14px',
+      boxShadow: isError ? '0 0 15px rgba(239, 68, 68, 0.2)' : '0 4px 10px rgba(0,0,0,0.06)',
+      cursor: 'grab',
+      position: 'relative'
+    }}>
+      <Handle type="target" position={Position.Left} style={{ background: 'var(--accent-primary)' }} />
+      
+      <div style={{ 
+        width: '45px', 
+        height: '45px', 
+        background: isError ? 'rgba(239, 68, 68, 0.1)' : 'var(--bg-tertiary)', 
+        borderRadius: '6px', 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center', 
+        fontSize: '1.1rem', 
+        fontWeight: 900, 
+        color: isError ? 'var(--accent-danger)' : 'var(--accent-primary)',
+        border: `1px solid ${isError ? 'rgba(239, 68, 68, 0.2)' : 'var(--border-color)'}`
+      }}>
+        {id}
+      </div>
+      <div style={{ flex: 1, overflow: 'hidden' }}>
+        <p style={{ margin: 0, fontSize: '0.7rem', fontWeight: 800, color: 'var(--text-white)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textTransform: 'uppercase' }}>{name}</p>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+          <span style={{ fontSize: '0.8rem', fontWeight: 900, color: 'var(--text-sub)' }}>{time}</span>
+          <span style={{ fontSize: '0.55rem', color: 'var(--text-sub)', opacity: 0.6, fontWeight: 800 }}>MINUTES</span>
+        </div>
+      </div>
+
+      <Handle type="source" position={Position.Right} style={{ background: 'var(--accent-primary)' }} />
+    </div>
+  );
+};
+
+const nodeTypes = {
+  task: TaskNode,
+};
+
+const edgeTypes = {
+  flow: FlowEdge,
+};
 
 const PrecedenceNetwork = ({ tasks }) => {
   const totalTime = tasks.reduce((sum, t) => sum + t.time, 0);
+  const errors = useMemo(() => detectCircularDependency(tasks), [tasks]);
 
-  // Dynamic layout calculation
-  const { nodes, edges, mapWidth, mapHeight } = useMemo(() => {
-    // 1. Calculate depths
+  const { initialNodes, initialEdges, layersCount } = useMemo(() => {
+    const errorTaskIds = new Set(errors.flatMap(e => e.cycle || []));
     const depths = {};
     const getDepth = (id, currentPath = new Set()) => {
       if (depths[id] !== undefined) return depths[id];
-      if (currentPath.has(id)) return 0; // prevent circular dependency infinite loop here
       const task = tasks.find(t => t.id === id);
       if (!task || !task.predecessors || task.predecessors.length === 0 || task.predecessors[0] === 'None') {
         depths[id] = 0;
@@ -19,7 +136,9 @@ const PrecedenceNetwork = ({ tasks }) => {
       let maxPredDepth = -1;
       currentPath.add(id);
       for (const p of task.predecessors) {
-        maxPredDepth = Math.max(maxPredDepth, getDepth(p, currentPath));
+        if (!currentPath.has(p)) {
+          maxPredDepth = Math.max(maxPredDepth, getDepth(p, currentPath));
+        }
       }
       currentPath.delete(id);
       depths[id] = maxPredDepth + 1;
@@ -28,145 +147,150 @@ const PrecedenceNetwork = ({ tasks }) => {
 
     tasks.forEach(t => getDepth(t.id));
 
-    // 2. Group by layers
     const layers = [];
     tasks.forEach(t => {
       const d = depths[t.id];
-      if (!layers[d]) layers[d] = [];
+      if (layers[d] === undefined) layers[d] = [];
       layers[d].push(t);
     });
 
-    // 3. Assign coordinates
-    const NODE_W = 220;
+    const NODE_W = 240;
     const NODE_H = 80;
-    const GAP_X = 100;
-    const GAP_Y = 40;
-    const MARGIN_X = 50;
-    const MARGIN_Y = 50;
+    const GAP_X = 140;
+    const GAP_Y = 60;
+    const MARGIN_X = 100;
+    const MARGIN_Y = 100;
 
-    const positionedNodes = [];
-    let maxLayerHeight = 0;
-
-    layers.forEach((layer) => {
-      if (!layer) return;
-      const layerNodes = layer.length;
-      const layerH = layerNodes * NODE_H + (layerNodes - 1) * GAP_Y;
-      maxLayerHeight = Math.max(maxLayerHeight, layerH);
-    });
+    const nodes = [];
+    const edges = [];
 
     layers.forEach((layer, layerIdx) => {
       if (!layer) return;
       const startX = MARGIN_X + layerIdx * (NODE_W + GAP_X);
-      const layerNodes = layer.length;
-      const layerH = layerNodes * NODE_H + (layerNodes - 1) * GAP_Y;
-      const startY = MARGIN_Y + (maxLayerHeight - layerH) / 2; // Center vertically
-
-      layer.forEach((task, idx) => {
-        positionedNodes.push({
-          ...task,
-          x: startX,
-          y: startY + idx * (NODE_H + GAP_Y),
-          w: NODE_W,
-          h: NODE_H
+      layer.forEach((task, nodeIdx) => {
+        const x = startX;
+        const y = MARGIN_Y + nodeIdx * (NODE_H + GAP_Y);
+        nodes.push({
+          id: task.id,
+          type: 'task',
+          position: { x, y },
+          data: { 
+            id: task.id, 
+            name: task.name, 
+            time: task.time,
+            isError: errorTaskIds.has(task.id)
+          },
         });
-      });
-    });
 
-    // 4. Create edges
-    const calculatedEdges = [];
-    tasks.forEach(t => {
-      const targetNode = positionedNodes.find(n => n.id === t.id);
-      if (!targetNode) return;
-      t.predecessors.forEach(p => {
-        const sourceNode = positionedNodes.find(n => n.id === p);
-        if (sourceNode) {
-          calculatedEdges.push({
-            id: `${sourceNode.id}-${targetNode.id}`,
-            x1: sourceNode.x + sourceNode.w,
-            y1: sourceNode.y + sourceNode.h / 2,
-            x2: targetNode.x,
-            y2: targetNode.y + targetNode.h / 2
+        if (task.predecessors && task.predecessors.length > 0 && task.predecessors[0] !== 'None') {
+          task.predecessors.forEach(pId => {
+            const isCycleEdge = errors.some(e => 
+              e.cycle && e.cycle.includes(pId) && e.cycle.includes(task.id) && 
+              e.cycle.indexOf(task.id) === (e.cycle.indexOf(pId) + 1) % e.cycle.length
+            );
+
+            edges.push({
+              id: `e${pId}-${task.id}`,
+              source: pId,
+              target: task.id,
+              type: 'flow',
+              data: { isCycle: isCycleEdge }
+            });
           });
         }
       });
     });
 
-    const w = MARGIN_X * 2 + (layers.length) * NODE_W + (layers.length - 1) * GAP_X;
-    const h = MARGIN_Y * 2 + maxLayerHeight;
-
-    return { nodes: positionedNodes, edges: calculatedEdges, mapWidth: w, mapHeight: h };
-  }, [tasks]);
+    return { initialNodes: nodes, initialEdges: edges, layersCount: layers.length };
+  }, [tasks, errors]);
 
   return (
-    <div className="animate-fade" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <header style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexShrink: 0 }}>
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      style={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        height: '100%', 
+        background: 'var(--bg-main)',
+        borderRadius: '12px',
+        overflow: 'hidden',
+        border: '1px solid var(--border-color)',
+        boxShadow: '0 20px 50px rgba(0,0,0,0.1)',
+        transition: 'all 0.3s ease'
+      }}
+    >
+      <div style={{ padding: '1.5rem 2rem 0 2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1 style={{ fontSize: '2.5rem', fontWeight: 800, margin: '0 0 0.5rem 0' }}>Precedence Network</h1>
-          <p style={{ color: 'var(--text-sub)', fontSize: '1.1rem' }}>Visualization of **task dependencies** and assembly flow sequences.</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-sub)', fontSize: '0.65rem', fontWeight: 800, letterSpacing: '1px' }}>
+            <Cpu size={12} />
+            MODULE 03
+          </div>
+          <h2 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 900, color: 'var(--text-white)', letterSpacing: '1px' }}>PRECEDENCE NETWORK</h2>
         </div>
-        <div style={{ textAlign: 'right' }}>
-            <p style={{ margin: 0, color: 'var(--text-sub)', fontSize: '0.9rem', fontWeight: 600 }}>TOTAL PROCESS TIME</p>
-            <h2 style={{ margin: 0, fontSize: '2.2rem', color: 'var(--accent-primary)', fontWeight: 800 }}>{totalTime} Mins</h2>
-        </div>
-      </header>
+      </div>
 
-      <div className="glass" style={{ flex: 1, position: 'relative', overflow: 'auto', padding: '1rem', minHeight: '500px', display: 'flex', alignItems: 'center' }}>
-          
-         <svg style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none' }} width={Math.max(mapWidth, 800)} height={Math.max(mapHeight, 500)}>
-            {/* Draw connectors based on precedence logic */}
-            <defs>
-              <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-                <polygon points="0 0, 10 3.5, 0 7" fill="var(--accent-primary)" opacity="0.6"/>
-              </marker>
-            </defs>
-            {edges.map(edge => {
-                // simple curve calculation
-                const cp1x = edge.x1 + (edge.x2 - edge.x1) / 2;
-                const path = `M ${edge.x1} ${edge.y1} C ${cp1x} ${edge.y1}, ${cp1x} ${edge.y2}, ${edge.x2} ${edge.y2}`;
-                return (
-                    <path key={edge.id} d={path} fill="transparent" stroke="var(--accent-primary)" strokeWidth="2" markerEnd="url(#arrowhead)" opacity="0.6" />
-                );
-            })}
-         </svg>
+      <div style={{ padding: '1.5rem', display: 'flex', gap: '1.5rem', flexShrink: 0, background: 'var(--card-bg)', borderBottom: '1px solid var(--border-color)' }}>
+         <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '0.8rem 1.5rem', display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ padding: '0.6rem', background: 'rgba(13, 148, 136, 0.1)', borderRadius: '8px' }}>
+              <Info size={18} color="var(--accent-primary)" />
+            </div>
+            <div>
+              <p style={{ margin: 0, fontSize: '0.55rem', color: 'var(--text-sub)', fontWeight: 800 }}>TOTAL PROCESS TIME</p>
+              <p style={{ margin: 0, fontSize: '1.0rem', fontWeight: 900, color: 'var(--text-white)' }}>{totalTime} Minutes</p>
+            </div>
+         </div>
+         <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '0.8rem 1.5rem', display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ padding: '0.6rem', background: 'rgba(99, 102, 241, 0.1)', borderRadius: '8px' }}>
+              <PlayCircle size={18} color="var(--accent-secondary)" />
+            </div>
+            <div>
+              <p style={{ margin: 0, fontSize: '0.55rem', color: 'var(--text-sub)', fontWeight: 800 }}>FLOW DEPTH</p>
+              <p style={{ margin: 0, fontSize: '1.0rem', fontWeight: 900, color: 'var(--text-white)' }}>{layersCount} Logical Layers</p>
+            </div>
+         </div>
+         
+         {errors.length > 0 && (
+           <div style={{ background: 'var(--accent-danger)20', border: '1px solid var(--accent-danger)', borderRadius: '8px', padding: '0.8rem 1.5rem', display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <AlertTriangle size={18} color="var(--accent-danger)" />
+              <div>
+                <p style={{ margin: 0, fontSize: '0.55rem', color: 'var(--accent-danger)', fontWeight: 800 }}>LOGIC ERROR</p>
+                <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: 900, color: 'var(--accent-danger)' }}>Circular Dependency Detected</p>
+              </div>
+           </div>
+         )}
 
-         {/* Nodes */}
-         <div style={{ position: 'relative', width: Math.max(mapWidth, 800), height: Math.max(mapHeight, 500) }}>
-             {nodes.map((node) => (
-                 <div 
-                    key={node.id} 
-                    className="glass"
-                    style={{
-                        position: 'absolute',
-                        left: node.x,
-                        top: node.y,
-                        width: node.w,
-                        height: node.h,
-                        border: '1px solid var(--glass-border)',
-                        borderLeft: '4px solid var(--accent-primary)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        justifyContent: 'center',
-                        padding: '0.8rem 1rem',
-                        boxSizing: 'border-box',
-                        background: 'rgba(10, 25, 47, 0.8)', // slightly more opaque to block lines behind
-                        boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
-                    }}
-                 >
-                     <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--accent-primary)', marginBottom: '4px', letterSpacing: '1px' }}>Task {node.id}</div>
-                     <div style={{ fontSize: '0.85rem', color: 'var(--text-white)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 600 }} title={node.name}>{node.name}</div>
-                     <div style={{ fontSize: '0.75rem', color: 'var(--text-sub)', marginTop: '4px' }}>{node.time} mins</div>
-                 </div>
-             ))}
+         <div style={{ marginLeft: 'auto', alignSelf: 'center', fontSize: '0.65rem', color: 'var(--text-sub)', fontWeight: 600, fontStyle: 'italic' }}>
+            Nodes are draggable. Teal particles show logical flow, red indicates cycles.
          </div>
       </div>
 
-      <div className="glass" style={{ marginTop: '2rem', padding: '1.2rem 1.5rem', display: 'flex', alignItems: 'center', gap: '1.5rem', flexShrink: 0 }}>
-          <div style={{ padding: '0.8rem', background: 'rgba(100, 255, 218, 0.05)', borderRadius: '8px' }}>
-            <Info size={20} color="var(--accent-primary)" />
-          </div>
-          <p style={{ margin: 0, color: 'var(--text-sub)', fontSize: '0.9rem' }}> The diagram shows the critical path and the necessary task sequencing starting from the base components. Each node is placed dynamically based on its depth in the dependency tree. </p>
+      <div style={{ flex: 1, position: 'relative' }}>
+        <ReactFlow
+          nodes={initialNodes}
+          edges={initialEdges}
+          nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          fitView
+        >
+          <Background color="var(--border-color)" variant="dots" gap={20} />
+          <Controls />
+          <Panel position="bottom-right" style={{ background: 'var(--card-bg)', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: 'var(--accent-primary)' }} />
+                <span style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-sub)' }}>VALID FLOW</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: 'var(--accent-danger)', boxShadow: '0 0 5px var(--accent-danger)' }} />
+                <span style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-sub)' }}>CIRCULAR CYCLE</span>
+              </div>
+            </div>
+          </Panel>
+        </ReactFlow>
       </div>
-    </div>
+    </motion.div>
   );
 };
 
