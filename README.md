@@ -1,16 +1,52 @@
-# React + Vite
+# OPTO-PROFIT: Industrial Engineering Engine
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+OPTO-PROFIT is a specialized full-stack toolkit designed for industrial engineers to optimize assembly lines, floor layouts, and financial performance.
 
-Currently, two official plugins are available:
+## 📁 Project Structure
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **`frontend/`**: React + Vite application. Built with a focus on data density, glassmorphism, and industrial aesthetics.
+- **`backend/`**: FastAPI + MongoDB backend for persisting tasks, configurations, and profiles.
 
-## React Compiler
+## 🚀 Getting Started
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### Prerequisites
+- Node.js (v18+)
+- Python 3.10+
+- MongoDB (Running on `localhost:27017`)
 
-## Expanding the ESLint configuration
+### Installation
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+#### Frontend
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+#### Backend
+```bash
+cd backend
+python -m venv venv
+./venv/Scripts/activate  # Windows
+pip install -r requirements.txt
+python main.py
+```
+
+## 🛠️ Tech Stack
+- **Frontend**: React, Vite, Framer Motion, Recharts, Lucide-React.
+- **Backend**: FastAPI, Motor (Async MongoDB), Pydantic.
+- **Styling**: Vanilla CSS with CSS Variables for theme management.
+
+## CI/CD
+- **CI**: `.github/workflows/ci.yml`
+  - Frontend: `npm ci`, `npm run lint`, `npm run build`
+  - Backend: installs `backend/requirements.txt`, runs unit tests, starts API, checks `GET /api/status`
+- **CD**: `.github/workflows/cd.yml`
+  - Triggered after successful CI on `main` (or manually)
+  - Builds and pushes Docker images to GHCR:
+    - `ghcr.io/<owner>/<repo>/frontend`
+    - `ghcr.io/<owner>/<repo>/backend`
+  - Optional post-publish deploy hook with repository secret `DEPLOY_WEBHOOK_URL`
+
+## 📐 Industrial Standards
+The project adheres to the `optoprofit-standards.md` for visual consistency and data discipline.
