@@ -44,6 +44,7 @@ const normalizeFailure = ({ error, response, url, method }) => {
     const data = error;
     const message =
       (data && typeof data === 'object' && data.message) ||
+      (data && typeof data === 'object' && data.detail) ||
       (typeof data === 'string' && data) ||
       fallback;
 

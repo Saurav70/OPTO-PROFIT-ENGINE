@@ -9,9 +9,10 @@ import {
   BaseEdge,
   getBezierPath,
 } from '@xyflow/react';
-import { Info, PlayCircle, Cpu, AlertTriangle } from 'lucide-react';
+import { Info, PlayCircle, Cpu, AlertTriangle, Network } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { detectCircularDependency } from '../utils/optimizer';
+import EmptyState from './EmptyState';
 
 // Custom Edge Component with Flow Particles
 const FlowEdge = ({
@@ -117,11 +118,14 @@ const edgeTypes = {
   flow: FlowEdge,
 };
 
-const PrecedenceNetwork = ({ tasks }) => {
-  const totalTime = tasks.reduce((sum, t) => sum + t.time, 0);
-  const errors = useMemo(() => detectCircularDependency(tasks), [tasks]);
+const PrecedenceNetwork = ({ tasks = [], onNavigate }) => {
+  const totalTime = useMemo(() => (tasks || []).reduce((sum, t) => sum + (Number(t.time) || 0), 0), [tasks]);
+  const errors = useMemo(() => detectCircularDependency(tasks || []), [tasks]);
 
   const { initialNodes, initialEdges, layersCount } = useMemo(() => {
+    if (!tasks || tasks.length === 0) {
+      return { initialNodes: [], initialEdges: [], layersCount: 0 };
+    }
     const errorTaskIds = new Set(errors.flatMap(e => e.cycle || []));
     const depths = {};
     const getDepth = (id, currentPath = new Set()) => {
@@ -201,6 +205,18 @@ const PrecedenceNetwork = ({ tasks }) => {
 
     return { initialNodes: nodes, initialEdges: edges, layersCount: layers.length };
   }, [tasks, errors]);
+
+  if (!tasks || tasks.length === 0) {
+    return (
+      <EmptyState
+        icon={Network}
+        title="NO TASKS DEFINED"
+        description="The Precedence Network visualises the task dependency graph. Define at least one task in Process Planning before generating the network."
+        actionText="GO TO PROCESS PLANNING"
+        onAction={() => onNavigate?.('planning')}
+      />
+    );
+  }
 
   return (
     <motion.div 

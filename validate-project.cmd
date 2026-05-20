@@ -2,7 +2,7 @@
 setlocal
 
 echo == Frontend: lint ==
-cd /d D:\OPTO-PROFIT\frontend
+cd /d "%~dp0frontend"
 call npm.cmd run lint
 if errorlevel 1 goto :fail
 
@@ -11,7 +11,7 @@ call npm.cmd run build
 if errorlevel 1 goto :fail
 
 echo == Backend: unit tests ==
-cd /d D:\OPTO-PROFIT\backend
+cd /d "%~dp0backend"
 call .\venv\Scripts\python.exe -m unittest discover -s tests -p test_*.py -v
 if errorlevel 1 goto :fail
 

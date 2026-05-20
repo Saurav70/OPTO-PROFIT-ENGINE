@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 import sys
 import time
@@ -17,7 +18,9 @@ def main() -> int:
         "--port",
         "8001",
     ]
-    proc = subprocess.Popen(cmd, cwd=r"D:\OPTO-PROFIT\backend")
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    backend_dir = os.path.dirname(script_dir)
+    proc = subprocess.Popen(cmd, cwd=backend_dir)
     try:
         for _ in range(8):
             try:

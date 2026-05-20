@@ -44,13 +44,19 @@ export const getVariableValue = (variables, key, fallback = 0) => {
 };
 
 /**
- * Formats a value as currency based on the config symbol.
+ * Formats a value as Indian Currency (₹) using Lakhs and Crores scaling.
  */
+// eslint-disable-next-line no-unused-vars
 export const formatCurrency = (value, variables) => {
-  const symbolVar = getVariable(variables, 'currency_symbol');
-  const symbol = symbolVar?.unit || '₹';
+  const symbol = '₹';
+  const valNum = Math.abs(value || 0);
+  const sign = (value || 0) < 0 ? '-' : '';
   
-  if (value >= 1000000) return `${symbol}${(value / 1000000).toFixed(2)}M`;
-  if (value >= 1000) return `${symbol}${(value / 1000).toFixed(1)}K`;
-  return `${symbol}${Math.round(value).toLocaleString()}`;
+  if (valNum >= 10000000) {
+    return `${sign}${symbol}${(valNum / 10000000).toFixed(2)} Cr`;
+  }
+  if (valNum >= 100000) {
+    return `${sign}${symbol}${(valNum / 100000).toFixed(2)} Lakh`;
+  }
+  return `${sign}${symbol}${Math.round(valNum).toLocaleString('en-IN')}`;
 };

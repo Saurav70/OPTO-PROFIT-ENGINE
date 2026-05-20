@@ -5,10 +5,15 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from typing import List
 
+# pyrefly: ignore [missing-import]
 import pyotp
+# pyrefly: ignore [missing-import]
 from bson import ObjectId
-from fastapi import Depends, FastAPI, Header, HTTPException, status
+# pyrefly: ignore [missing-import]
+from fastapi import Depends, FastAPI, Header, HTTPException, Response, status
+# pyrefly: ignore [missing-import]
 from fastapi.middleware.cors import CORSMiddleware
+# pyrefly: ignore [missing-import]
 from motor.motor_asyncio import AsyncIOMotorClient
 
 from .models import (
@@ -20,7 +25,10 @@ from .models import (
     RegisterRequest,
     Task,
     ForgotPasswordRequest,
+    ResetPasswordRequest,
     User,
+    UpdateUserRequest,
+    ChangePasswordRequest,
     TwoFactorDisableRequest,
     TwoFactorEnableRequest,
     TwoFactorSetupResponse,
@@ -29,6 +37,30 @@ from .models import (
 from .routers import analytics, healthcheck
 
 app = FastAPI(title="OPTO-PROFIT API")
+
+DEFAULT_CONFIG = {
+    "productName": "New Product",
+    "variables": [
+        {"key": "shift_time", "label": "Shift Time", "value": 480, "unit": "min", "category": "Production"},
+        {"key": "demand", "label": "Daily Demand", "value": 16, "unit": "units", "category": "Production"},
+        {"key": "unit_price", "label": "Unit Price", "value": 0, "unit": "₹", "category": "Financial"},
+        {"key": "unit_cost", "label": "Unit Cost", "value": 0, "unit": "₹", "category": "Financial"},
+        {"key": "work_days", "label": "Work Days / Month", "value": 25, "unit": "days", "category": "Financial"},
+        {"key": "current_cycle_time", "label": "Current Cycle Time", "value": 35, "unit": "min", "category": "Baseline"},
+        {"key": "current_operators", "label": "Current Operators", "value": 5, "unit": "people", "category": "Baseline"},
+        {"key": "operator_cost_per_hour", "label": "Operator Cost / Hour", "value": 0, "unit": "₹", "category": "Financial"},
+        {"key": "investment_cost", "label": "Investment Cost", "value": 0, "unit": "₹", "category": "Financial"},
+        {"key": "target_cycle_time", "label": "Target Cycle Time", "value": 30, "unit": "min", "category": "Production"},
+        {"key": "currency_symbol", "label": "Currency Symbol", "value": 0, "unit": "₹", "category": "General"},
+    ],
+    "formulas": {
+        "TaktTime": "shift_time / demand",
+        "MonthlyProfit": "demand * work_days * (unit_price - unit_cost)",
+        "ROI_Efficiency": "MonthlyProfit * 0.10",
+    },
+    "custom_zones": [],
+    "zone_exclusions": {},
+}
 
 frontend_origin = os.getenv("FRONTEND_ORIGIN", "http://localhost:5173")
 frontend_origins = [
@@ -91,6 +123,21 @@ async def _create_session(user_id: str) -> str:
     return token
 
 
+async def _create_password_reset_token(user_id: str) -> str:
+    token = secrets.token_urlsafe(48)
+    await app.database["password_reset_tokens"].delete_many({"user_id": user_id, "used_at": None})
+    await app.database["password_reset_tokens"].insert_one(
+        {
+            "token_hash": _hash_token(token),
+            "user_id": user_id,
+            "created_at": _utc_now(),
+            "expires_at": _utc_now() + timedelta(minutes=30),
+            "used_at": None,
+        }
+    )
+    return token
+
+
 @app.on_event("startup")
 async def startup_db_client():
     mongodb_uri = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
@@ -99,6 +146,8 @@ async def startup_db_client():
     await app.database["users"].create_index("username_normalized", unique=True)
     await app.database["sessions"].create_index("token_hash", unique=True)
     await app.database["sessions"].create_index("expires_at", expireAfterSeconds=0)
+    await app.database["password_reset_tokens"].create_index("token_hash", unique=True)
+    await app.database["password_reset_tokens"].create_index("expires_at", expireAfterSeconds=0)
 
 
 @app.on_event("shutdown")
@@ -152,6 +201,7 @@ async def register(payload: RegisterRequest):
         raise HTTPException(status_code=409, detail="Username already exists")
 
     user_id = str(ObjectId())
+    tenant_id = f"T-{secrets.token_hex(4).upper()}" # Generate a mock tenant ID for new users
     await app.database["users"].insert_one(
         {
             "_id": user_id,
@@ -162,6 +212,10 @@ async def register(payload: RegisterRequest):
             "created_at": _utc_now(),
             "is_2fa_enabled": False,
             "two_factor_secret": None,
+            "full_name": None,
+            "phone_number": None,
+            "role": "Admin",
+            "tenant_id": tenant_id
         }
     )
     token = await _create_session(user_id)
@@ -196,8 +250,61 @@ async def get_me(current_user: dict = Depends(require_user)):
         id=user.id,
         username=user.username,
         email=user.email,
-        is_2fa_enabled=user.is_2fa_enabled
+        is_2fa_enabled=user.is_2fa_enabled,
+        full_name=user.full_name,
+        phone_number=user.phone_number,
+        role=user.role,
+        tenant_id=user.tenant_id,
+        created_at=user.created_at
     )
+
+@app.put("/api/users/me", response_model=AuthUserResponse)
+async def update_me(payload: UpdateUserRequest, current_user: dict = Depends(require_user)):
+    update_data = {}
+    if payload.full_name is not None:
+        update_data["full_name"] = payload.full_name
+    if payload.phone_number is not None:
+        update_data["phone_number"] = payload.phone_number
+    if payload.email is not None:
+        update_data["email"] = payload.email
+
+    if update_data:
+        await app.database["users"].update_one(
+            {"_id": current_user["_id"]},
+            {"$set": update_data}
+        )
+
+    user_doc = await app.database["users"].find_one({"_id": current_user["_id"]})
+    user = User(**user_doc)
+    return AuthUserResponse(
+        id=user.id,
+        username=user.username,
+        email=user.email,
+        is_2fa_enabled=user.is_2fa_enabled,
+        full_name=user.full_name,
+        phone_number=user.phone_number,
+        role=user.role,
+        tenant_id=user.tenant_id,
+        created_at=user.created_at
+    )
+
+@app.post("/api/auth/change-password")
+async def change_password(payload: ChangePasswordRequest, current_user: dict = Depends(require_user)):
+    if payload.new_password != payload.confirm_password:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="New passwords do not match")
+    
+    if len(payload.new_password) < 8:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Password must be at least 8 characters")
+        
+    user_doc = await app.database["users"].find_one({"_id": current_user["_id"]})
+    if not _verify_password(payload.current_password, user_doc.get("password_hash", "")):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Incorrect current password")
+        
+    await app.database["users"].update_one(
+        {"_id": current_user["_id"]},
+        {"$set": {"password_hash": _hash_password(payload.new_password)}}
+    )
+    return {"message": "Password updated successfully"}
 
 
 @app.post("/api/auth/logout")
@@ -213,19 +320,50 @@ async def logout(authorization: str | None = Header(default=None)):
 async def forgot_password(payload: ForgotPasswordRequest):
     email = payload.email.lower().strip()
     user = await app.database["users"].find_one({"email": email})
+    generic_message = "If this email is registered, a password reset link has been sent."
     
     if not user:
-        # For security, don't reveal if user exists, but here we can just return success
-        return {"message": "If this email is registered, you will receive a reset link shortly."}
+        return {"message": generic_message}
     
-    # Simulate sending email
-    reset_token = secrets.token_urlsafe(32)
+    reset_token = await _create_password_reset_token(user["_id"])
     print(f"\n[EMAIL SIMULATION] To: {email}")
     print(f"[EMAIL SIMULATION] Subject: Password Reset Request for OPTO-PROFIT")
-    print(f"[EMAIL SIMULATION] Content: Use this token to reset your password: {reset_token}")
+    print(f"[EMAIL SIMULATION] Content: Use this token within 30 minutes: {reset_token}")
     print(f"[EMAIL SIMULATION] URL: http://localhost:5173/reset-password?token={reset_token}\n")
     
-    return {"message": "Recovery email sent successfully."}
+    return {"message": generic_message}
+
+
+@app.post("/api/auth/reset-password")
+async def reset_password(payload: ResetPasswordRequest):
+    token = payload.token.strip()
+    if len(payload.new_password) < 8:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Password must be at least 8 characters")
+
+    token_doc = await app.database["password_reset_tokens"].find_one(
+        {"token_hash": _hash_token(token), "used_at": None}
+    )
+    if not token_doc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired reset token")
+
+    expires_at = token_doc.get("expires_at")
+    if expires_at and expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if not expires_at or expires_at < _utc_now():
+        await app.database["password_reset_tokens"].delete_one({"_id": token_doc["_id"]})
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired reset token")
+
+    user_id = token_doc["user_id"]
+    await app.database["users"].update_one(
+        {"_id": user_id},
+        {"$set": {"password_hash": _hash_password(payload.new_password)}}
+    )
+    await app.database["password_reset_tokens"].update_one(
+        {"_id": token_doc["_id"]},
+        {"$set": {"used_at": _utc_now()}}
+    )
+    await app.database["sessions"].delete_many({"user_id": user_id})
+    return {"message": "Password reset complete. You can log in now."}
 
 
 async def require_2fa_token(authorization: str | None = Header(default=None)) -> dict:
@@ -347,57 +485,97 @@ async def disable_2fa(payload: TwoFactorDisableRequest, current_user_doc: dict =
 
 # Tasks Endpoints
 @app.get("/api/tasks", response_model=List[Task])
-async def get_tasks(_: dict = Depends(require_user)):
-    tasks = await app.database["tasks"].find().to_list(1000)
+async def get_tasks(current_user: dict = Depends(require_user)):
+    tasks = await app.database["tasks"].find({"user_id": current_user["_id"]}).to_list(1000)
     for task in tasks:
         task["id"] = task.get("id", str(task["_id"]))
     return tasks
 
 
+@app.put("/api/tasks", response_model=List[Task])
+async def replace_tasks(tasks: List[Task], current_user: dict = Depends(require_user)):
+    user_id = current_user["_id"]
+    await app.database["tasks"].delete_many({"user_id": user_id})
+    task_docs = [{**task.dict(), "user_id": user_id} for task in tasks]
+    if task_docs:
+        await app.database["tasks"].insert_many(task_docs)
+    return tasks
+
+
 @app.post("/api/tasks", response_model=Task)
-async def create_task(task: Task, _: dict = Depends(require_user)):
-    new_task = await app.database["tasks"].insert_one(task.dict())
+async def create_task(task: Task, current_user: dict = Depends(require_user)):
+    new_task = await app.database["tasks"].insert_one({**task.dict(), "user_id": current_user["_id"]})
     created_task = await app.database["tasks"].find_one({"_id": new_task.inserted_id})
     return created_task
 
 
+@app.put("/api/tasks/{task_id}", response_model=Task)
+async def update_task(task_id: str, task: Task, current_user: dict = Depends(require_user)):
+    user_id = current_user["_id"]
+    await app.database["tasks"].replace_one({"id": task_id, "user_id": user_id}, {**task.dict(), "user_id": user_id}, upsert=True)
+    updated_task = await app.database["tasks"].find_one({"id": task.id, "user_id": user_id})
+    if not updated_task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return updated_task
+
+
+@app.delete("/api/tasks/{task_id}", status_code=204)
+async def delete_task(task_id: str, current_user: dict = Depends(require_user)):
+    result = await app.database["tasks"].delete_one({"id": task_id, "user_id": current_user["_id"]})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return Response(status_code=204)
+
+
 # Config Endpoints (Singular resource)
 @app.get("/api/config", response_model=Config)
-async def get_config(_: dict = Depends(require_user)):
-    config = await app.database["config"].find_one()
+async def get_config(current_user: dict = Depends(require_user)):
+    user_id = current_user["_id"]
+    config = await app.database["config"].find_one({"user_id": user_id})
+    if not config:
+        legacy_config = await app.database["config"].find_one({"user_id": {"$exists": False}})
+        if legacy_config:
+            legacy_config.pop("_id", None)
+            legacy_config["user_id"] = user_id
+            await app.database["config"].insert_one(legacy_config)
+            config = legacy_config
+    if not config:
+        config = {**DEFAULT_CONFIG, "user_id": user_id}
+        await app.database["config"].insert_one(config)
     if config:
         return config
     raise HTTPException(status_code=404, detail="Config not found")
 
 
 @app.put("/api/config")
-async def update_config(config: Config, _: dict = Depends(require_user)):
-    await app.database["config"].replace_one({}, config.dict(), upsert=True)
+async def update_config(config: Config, current_user: dict = Depends(require_user)):
+    await app.database["config"].replace_one({"user_id": current_user["_id"]}, {**config.dict(), "user_id": current_user["_id"]}, upsert=True)
     return {"message": "Config updated"}
 
 
 # Profiles Endpoints
 @app.get("/api/profiles", response_model=List[Profile])
-async def get_profiles(_: dict = Depends(require_user)):
-    profiles = await app.database["profiles"].find().to_list(1000)
+async def get_profiles(current_user: dict = Depends(require_user)):
+    profiles = await app.database["profiles"].find({"user_id": current_user["_id"]}).to_list(1000)
     return profiles
 
 
 @app.post("/api/profiles", response_model=Profile)
-async def create_profile(profile: Profile, _: dict = Depends(require_user)):
-    await app.database["profiles"].insert_one(profile.dict())
+async def create_profile(profile: Profile, current_user: dict = Depends(require_user)):
+    await app.database["profiles"].insert_one({**profile.dict(), "user_id": current_user["_id"]})
     return profile
 
 
 @app.delete("/api/profiles/{profile_id}")
-async def delete_profile(profile_id: str, _: dict = Depends(require_user)):
-    result = await app.database["profiles"].delete_one({"id": profile_id})
+async def delete_profile(profile_id: str, current_user: dict = Depends(require_user)):
+    result = await app.database["profiles"].delete_one({"id": profile_id, "user_id": current_user["_id"]})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Profile not found")
     return {"message": "Profile deleted"}
 
 
 if __name__ == "__main__":
+    # pyrefly: ignore [missing-import]
     import uvicorn
 
     uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -4,7 +4,7 @@ on:
   workflow_run:
     workflows: ["CI"]
     types: [completed]
-    branches: [main]
+    branches: [main, master]
   workflow_dispatch:
 
 permissions:
@@ -15,11 +15,17 @@ jobs:
   publish-images:
     if: >
       github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+      (github.event.workflow_run.conclusion == 'success' && (github.event.workflow_run.head_branch == 'main' || github.event.workflow_run.head_branch == 'master'))
     runs-on: ubuntu-latest
+    env:
+      DEPLOY_WEBHOOK_URL: ${{ secrets.DEPLOY_WEBHOOK_URL }}
+      IMAGE_BACKEND: ""
+      IMAGE_FRONTEND: ""
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -31,23 +37,31 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Lowercase image names
+        shell: bash
+        run: |
+          echo "IMAGE_BACKEND=ghcr.io/${GITHUB_REPOSITORY,,}/backend" >> $GITHUB_ENV
+          echo "IMAGE_FRONTEND=ghcr.io/${GITHUB_REPOSITORY,,}/frontend" >> $GITHUB_ENV
+
       - name: Extract metadata (backend)
         id: meta_backend
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository }}/backend
+          images: ${{ env.IMAGE_BACKEND }}
           tags: |
             type=raw,value=latest
             type=sha,format=short
+            type=ref,event=branch
 
       - name: Extract metadata (frontend)
         id: meta_frontend
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository }}/frontend
+          images: ${{ env.IMAGE_FRONTEND }}
           tags: |
             type=raw,value=latest
             type=sha,format=short
+            type=ref,event=branch
 
       - name: Build and push backend image
         uses: docker/build-push-action@v6
@@ -57,6 +71,8 @@ jobs:
           push: true
           tags: ${{ steps.meta_backend.outputs.tags }}
           labels: ${{ steps.meta_backend.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Build and push frontend image
         uses: docker/build-push-action@v6
@@ -66,7 +82,9 @@ jobs:
           push: true
           tags: ${{ steps.meta_frontend.outputs.tags }}
           labels: ${{ steps.meta_frontend.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Trigger deploy webhook (optional)
-        if: ${{ secrets.DEPLOY_WEBHOOK_URL != '' }}
-        run: curl -fsS -X POST "${{ secrets.DEPLOY_WEBHOOK_URL }}"
+        if: env.DEPLOY_WEBHOOK_URL != ''
+        run: curl -fsS -X POST "${{ env.DEPLOY_WEBHOOK_URL }}"

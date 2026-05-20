@@ -1,16 +1,64 @@
-import React, { useState } from 'react';
-import { DollarSign, Cpu, ArrowUpRight, Clock, Package, Activity, ToggleLeft, ToggleRight } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { IndianRupee, ArrowUpRight, Package, Activity, ToggleLeft, ToggleRight, FileText, Download } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { calculateROI } from '../utils/optimizer';
 import { formatCurrency, getVariableValue } from '../utils/formulaEngine';
+import { api } from '../services/api';
 
 const FinancialAnalytics = ({ tasks, config, optimization }) => {
   const [liveChart, setLiveChart] = useState(false);
+  const [serverRoi, setServerRoi] = useState(null);
 
-  const roi = calculateROI(tasks, config, optimization || {});
+  const localRoi = calculateROI(tasks, config, optimization || {});
+  const roi = serverRoi || localRoi;
   
   const variables = config?.variables || [];
   const workDays = getVariableValue(variables, 'work_days', 25);
+  const paybackLabel = roi.paybackMonths > 0 ? `${roi.paybackMonths.toFixed(1)} mo` : 'N/A';
+
+  const handlePdfExport = () => {
+    window.print();
+  };
+
+  const handleCsvExport = () => {
+    const rows = [
+      ['Metric', 'Value'],
+      ['Monthly Profit', roi.monthlyProfit || 0],
+      ['Profit Increase', roi.profitIncrease || 0],
+      ['Baseline Monthly Profit', roi.baselineMonthlyProfit || 0],
+      ['Optimized Monthly Profit', roi.optimizedMonthlyProfit || roi.monthlyProfit || 0],
+      ['Baseline Daily Production', roi.baselineDailyProduction || 0],
+      ['Optimized Daily Production', roi.dailyProduction || 0],
+      ['Baseline Labor Cost', roi.baselineLaborCost || 0],
+      ['Optimized Labor Cost', roi.optimizedLaborCost || 0],
+      ['Investment Cost', roi.investmentCost || 0],
+      ['Payback Months', roi.paybackMonths || 0],
+      ['Line Efficiency', optimization?.efficiency || '0.00'],
+    ];
+    const csv = rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `financial_report_${(config?.productName || 'optoprofit').toLowerCase().replace(/\s+/g, '_')}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    api.post('/api/analytics/roi', { tasks, config, optimization: optimization || {} })
+      .then((data) => {
+        if (!cancelled) setServerRoi(data);
+      })
+      .catch(() => {
+        if (!cancelled) setServerRoi(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tasks, config, optimization]);
 
   // ── Baseline State (Unoptimized) ──
   // For simplicity in this view, we compare against a fixed legacy baseline
@@ -31,8 +79,10 @@ const FinancialAnalytics = ({ tasks, config, optimization }) => {
   const optimizedArea = `${toSvgX(0)},220 ${optimizedPoints} ${toSvgX(11)},220`;
 
   const stats = [
-    { label: 'ANNUAL PROJECTED PROFIT', val: formatCurrency(roi.monthlyProfit * 12, variables), icon: DollarSign, color: 'var(--accent-primary)' },
+    { label: 'ANNUAL PROJECTED PROFIT', val: formatCurrency(roi.monthlyProfit * 12, variables), icon: IndianRupee, color: 'var(--accent-primary)' },
     { label: 'LINE EFFICIENCY', val: `${optimization?.efficiency || '0.00'}%`, icon: Activity, color: 'var(--accent-secondary)' },
+    { label: 'BASELINE MONTHLY PROFIT', val: formatCurrency(roi.baselineMonthlyProfit || 0, variables), icon: Package, color: '#0891b2' },
+    { label: 'PAYBACK PERIOD', val: paybackLabel, icon: ArrowUpRight, color: 'var(--accent-warning)' },
   ];
 
   return (
@@ -46,12 +96,20 @@ const FinancialAnalytics = ({ tasks, config, optimization }) => {
 
           <h2 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 900, color: 'var(--text-white)', letterSpacing: '1px' }}>FINANCIAL ANALYTICS</h2>
         </div>
+        <div className="no-print" style={{ display: 'flex', gap: '0.75rem' }}>
+          <button onClick={handlePdfExport} className="btn-outline" style={{ padding: '0.55rem 0.9rem', fontSize: '0.68rem', display: 'flex', alignItems: 'center', gap: '7px' }}>
+            <FileText size={14} /> PDF
+          </button>
+          <button onClick={handleCsvExport} className="btn-outline" style={{ padding: '0.55rem 0.9rem', fontSize: '0.68rem', display: 'flex', alignItems: 'center', gap: '7px' }}>
+            <Download size={14} /> EXCEL CSV
+          </button>
+        </div>
       </div>
 
       <div style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '2rem', overflowY: 'auto' }}>
 
         {/* Metric Strip */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1.5rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1.5rem' }}>
           {stats.map((m, i) => (
             <div key={i} style={{ background: 'var(--card-bg)', padding: '1.5rem', borderRadius: '8px', border: '1px solid var(--border-color)', borderLeft: `4px solid ${m.color}`, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', display: 'flex', flexDirection: 'column', gap: '10px', transition: 'all 0.3s ease' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -127,7 +185,7 @@ const FinancialAnalytics = ({ tasks, config, optimization }) => {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
               <div style={{ background: 'rgba(255,255,255,0.05)', padding: '1rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <DollarSign size={14} color="var(--accent-primary)" />
+                  <IndianRupee size={14} color="var(--accent-primary)" />
                   <span style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.4)', fontWeight: 800, letterSpacing: '0.5px' }}>NET MONTHLY PROFIT</span>
                 </div>
                 <div style={{ fontSize: '1.4rem', fontWeight: 900, color: 'var(--text-white)' }}>{formatCurrency(roi.monthlyProfit, variables)} <sub style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.3)' }}>/ Mo</sub></div>

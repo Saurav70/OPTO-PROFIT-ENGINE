@@ -55,6 +55,10 @@ class User(BaseModel):
     created_at: datetime
     is_2fa_enabled: Optional[bool] = False
     two_factor_secret: Optional[str] = None
+    full_name: Optional[str] = None
+    phone_number: Optional[str] = None
+    role: Optional[str] = "User"
+    tenant_id: Optional[str] = None
 
 
 class RegisterRequest(BaseModel):
@@ -79,10 +83,30 @@ class AuthUserResponse(BaseModel):
     username: str
     email: Optional[str] = None
     is_2fa_enabled: Optional[bool] = False
+    full_name: Optional[str] = None
+    phone_number: Optional[str] = None
+    role: Optional[str] = None
+    tenant_id: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+class UpdateUserRequest(BaseModel):
+    full_name: Optional[str] = None
+    phone_number: Optional[str] = None
+    email: Optional[str] = None
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+    confirm_password: str
 
 
 class ForgotPasswordRequest(BaseModel):
     email: str
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
 
 
 class TwoFactorSetupResponse(BaseModel):

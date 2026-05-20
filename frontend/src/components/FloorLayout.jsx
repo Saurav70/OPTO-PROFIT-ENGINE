@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Activity,
   Box,
@@ -9,9 +9,11 @@ import {
   SlidersHorizontal,
   Square,
   Workflow,
+  Grid,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { calculateTaktTime, runOptimization } from '../utils/optimizer';
+import EmptyState from './EmptyState';
 
 const STATION_CARD_WIDTH = 158;
 const STATION_CARD_HEIGHT = 132;
@@ -95,12 +97,12 @@ const getStationRole = (idx, total) => {
   return `Assembly cell ${idx + 1}`;
 };
 
-const FloorLayout = ({ tasks, config }) => {
+const FloorLayout = ({ tasks = [], config, onNavigate }) => {
   const taktTime = useMemo(
-    () => calculateTaktTime(config),
+    () => calculateTaktTime(config || {}),
     [config]
   );
-  const optimization = useMemo(() => runOptimization(tasks, taktTime, 'LTF', config), [tasks, taktTime, config]);
+  const optimization = useMemo(() => runOptimization(tasks || [], taktTime, 'LTF', config || {}), [tasks, taktTime, config]);
 
   const [layoutType] = useState('u-shape');
   const [showArrows, setShowArrows] = useState(true);
@@ -113,7 +115,7 @@ const FloorLayout = ({ tasks, config }) => {
     typeof window !== 'undefined' ? window.innerWidth : 1440
   );
   const [stationOffsets, setStationOffsets] = useState(() =>
-    createOffsetMap(optimization.stations.length)
+    createOffsetMap(optimization?.stations?.length || 0)
   );
   const [simulationState, setSimulationState] = useState({
     phase: 'idle',
@@ -333,6 +335,18 @@ const FloorLayout = ({ tasks, config }) => {
       timers.forEach(clearTimeout);
     };
   }, [canvasMetrics.renderStations, connectors, isSimulating, simulationSpeed, totalTransferDistance]);
+
+  if (!tasks || tasks.length === 0) {
+    return (
+      <EmptyState
+        icon={Grid}
+        title="NO FLOOR LAYOUT AVAILABLE"
+        description="The Floor Layout canvas renders workstation positions based on your process tasks. Define tasks in Process Planning to generate the draggable floor plan."
+        actionText="GO TO PROCESS PLANNING"
+        onAction={() => onNavigate?.('planning')}
+      />
+    );
+  }
 
   const getBasePosition = (idx) => basePositions[idx] || { x: 100 + idx * 250, y: 210 };
 

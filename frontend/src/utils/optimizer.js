@@ -26,9 +26,8 @@ export const calculateTaktTime = (config) => {
     return evaluateFormula(formulas.TaktTime, context);
   }
 
-  // Fallback to legacy fields or variable keys
-  const availableTime = getVariableValue(variables, 'shift_time', config?.shiftTime || 0);
-  const demand = getVariableValue(variables, 'demand', config?.demand || 0);
+  const availableTime = getVariableValue(variables, 'shift_time', 0);
+  const demand = getVariableValue(variables, 'demand', 0);
   
   if (demand <= 0) return 0;
   return availableTime / demand;
@@ -297,8 +296,8 @@ export const calculateCriticalPath = (tasks, stations) => {
 // Returns a structured array of formula derivation steps for live display.
 export const generateFormulaTrace = (tasks, config, optimization) => {
   const variables = config?.variables || [];
-  const T = getVariableValue(variables, 'shift_time', toFiniteNumber(config?.shiftTime, 480));
-  const D = getVariableValue(variables, 'demand', toFiniteNumber(config?.demand, 1));
+  const T = getVariableValue(variables, 'shift_time', 480);
+  const D = getVariableValue(variables, 'demand', 1);
   const C = calculateTaktTime(config); // Use the dynamic calculator
   const sumT = getTotalTaskTime(tasks);
   const Nmin = C > 0 ? Math.ceil(sumT / C) : 0;
@@ -371,37 +370,45 @@ export const generateFormulaTrace = (tasks, config, optimization) => {
 /* ─── Financial ROI Calculations ─── */
 export const calculateROI = (tasks, config, optimization) => {
   const variables = config?.variables || [];
-  const formulas = config?.formulas || {};
-  const context = buildContext(variables, {
-    total_task_time: getTotalTaskTime(tasks),
-    n_actual: optimization?.nActual || 0,
-    takt_time: calculateTaktTime(config)
-  });
+  const shiftTime = getVariableValue(variables, 'shift_time', 0);
+  const demand = getVariableValue(variables, 'demand', 0);
+  const unitPrice = getVariableValue(variables, 'unit_price', 0);
+  const unitCost = getVariableValue(variables, 'unit_cost', 0);
+  const workDays = getVariableValue(variables, 'work_days', 0);
+  const currentCycleTime = getVariableValue(variables, 'current_cycle_time', calculateTaktTime(config));
+  const currentOperators = getVariableValue(variables, 'current_operators', optimization?.nActual || 0);
+  const operatorCostPerHour = getVariableValue(variables, 'operator_cost_per_hour', 0);
+  const investmentCost = getVariableValue(variables, 'investment_cost', 0);
 
-  // Dynamic Monthly Profit
-  let monthlyProfit = 0;
-  if (formulas.MonthlyProfit) {
-    monthlyProfit = evaluateFormula(formulas.MonthlyProfit, context);
-  } else {
-    // Fallback
-    const unitPrice = getVariableValue(variables, 'unit_price', config?.unitPrice || 0);
-    const unitCost = getVariableValue(variables, 'unit_cost', config?.unitCost || 0);
-    const demand = getVariableValue(variables, 'demand', config?.demand || 0);
-    const workDays = getVariableValue(variables, 'work_days', config?.workDaysPerMonth || 0);
-    monthlyProfit = demand * workDays * (unitPrice - unitCost);
-  }
+  const optimizedCycleTime = optimization?.actualCycleTime || calculateTaktTime(config);
+  const optimizedOperators = optimization?.nActual || 0;
+  const contributionMargin = unitPrice - unitCost;
+  const laborHoursPerDay = shiftTime / 60;
 
-  // Dynamic ROI Efficiency (Demonstrates conditional logic)
-  let profitIncrease = 0;
-  if (formulas.ROI_Efficiency) {
-    profitIncrease = evaluateFormula(formulas.ROI_Efficiency, context);
-  } else {
-    profitIncrease = monthlyProfit * 0.1; // Default 10% lift
-  }
+  const getDailyOutput = (cycleTime) => {
+    if (shiftTime <= 0 || cycleTime <= 0 || demand <= 0) return 0;
+    return Math.min(demand, Math.floor(shiftTime / cycleTime));
+  };
+
+  const baselineDailyProduction = getDailyOutput(currentCycleTime);
+  const optimizedDailyProduction = getDailyOutput(optimizedCycleTime);
+  const baselineLaborCost = currentOperators * operatorCostPerHour * laborHoursPerDay * workDays;
+  const optimizedLaborCost = optimizedOperators * operatorCostPerHour * laborHoursPerDay * workDays;
+  const baselineMonthlyProfit = (baselineDailyProduction * workDays * contributionMargin) - baselineLaborCost;
+  const monthlyProfit = (optimizedDailyProduction * workDays * contributionMargin) - optimizedLaborCost;
+  const profitIncrease = monthlyProfit - baselineMonthlyProfit;
+  const paybackMonths = profitIncrease > 0 && investmentCost > 0 ? investmentCost / profitIncrease : 0;
 
   return {
     monthlyProfit,
     profitIncrease,
-    dailyProduction: getVariableValue(variables, 'demand', 0)
+    dailyProduction: optimizedDailyProduction,
+    baselineDailyProduction,
+    baselineMonthlyProfit,
+    optimizedMonthlyProfit: monthlyProfit,
+    baselineLaborCost,
+    optimizedLaborCost,
+    paybackMonths,
+    investmentCost
   };
 };

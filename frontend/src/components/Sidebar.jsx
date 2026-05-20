@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Cpu, Lock, ChevronRight, Sun, Moon } from 'lucide-react';
+import { Cpu, Lock, ChevronRight, Sun, Moon, X, LogOut, Settings } from 'lucide-react';
+import { api } from '../services/api';
 
 const Sidebar = ({ 
   sidebarItems, 
@@ -8,10 +9,25 @@ const Sidebar = ({
   maxStepReached, 
   navigateTo, 
   darkMode, 
-  setDarkMode 
+  setDarkMode,
+  isMobileOpen = false,
+  onCloseMobile,
+  onLogout,
+  onOpenSettings
 }) => {
+  const handleLogout = async () => {
+    try {
+      await api.post('/api/auth/logout');
+    } catch (err) {
+      console.error('Logout failed:', err);
+    } finally {
+      api.auth.clearToken();
+      if (onLogout) onLogout();
+    }
+  };
+
   return (
-    <aside className="no-print" style={{
+    <aside className={`app-sidebar no-print ${isMobileOpen ? 'mobile-open' : ''}`} style={{
       width: '300px',
       background: 'var(--sidebar-bg)',
       padding: '2rem 1.5rem',
@@ -20,7 +36,7 @@ const Sidebar = ({
       flexShrink: 0,
       boxShadow: '10px 0 30px rgba(0,0,0,0.1)',
       zIndex: 100,
-      transition: 'background-color 0.3s ease'
+      transition: 'background-color 0.3s ease, transform 0.25s ease'
     }}>
       <div style={{ marginBottom: '3rem', display: 'flex', alignItems: 'center', gap: '12px' }}>
         <div style={{ 
@@ -39,6 +55,14 @@ const Sidebar = ({
           <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#fff', letterSpacing: '2px' }}>OPTO-PROFIT</div>
           <div style={{ fontSize: '0.6rem', color: 'var(--accent-primary)', fontWeight: 800, letterSpacing: '1px' }}>INDUSTRIAL ENGINE v4.0</div>
         </div>
+        <button
+          type="button"
+          className="mobile-nav-close"
+          onClick={onCloseMobile}
+          aria-label="Close navigation"
+        >
+          <X size={18} />
+        </button>
       </div>
 
       <div style={{ 
@@ -72,11 +96,29 @@ const Sidebar = ({
       
       <div style={{ 
         marginTop: 'auto', 
-        padding: '1rem', 
+        paddingTop: '1rem', 
         display: 'flex', 
-        justifyContent: 'center', 
+        flexDirection: 'column',
+        gap: '1rem',
         borderTop: '1px solid rgba(255,255,255,0.05)' 
       }}>
+         <div 
+          onClick={onOpenSettings} 
+          style={{ 
+            cursor: 'pointer', 
+            color: 'var(--accent-primary)', 
+            opacity: 0.8, 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '8px', 
+            fontSize: '0.75rem', 
+            fontWeight: 800 
+          }}
+        >
+           <Settings size={16} />
+           <span>SETTINGS</span>
+         </div>
+
          <div 
           onClick={() => setDarkMode(!darkMode)} 
           style={{ 
@@ -92,6 +134,23 @@ const Sidebar = ({
         >
            {darkMode ? <Sun size={16} /> : <Moon size={16} />}
            <span>{darkMode ? 'LIGHT MODE' : 'DARK MODE'}</span>
+         </div>
+
+         <div 
+          onClick={handleLogout} 
+          style={{ 
+            cursor: 'pointer', 
+            color: 'var(--accent-danger)', 
+            opacity: 0.8, 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '8px', 
+            fontSize: '0.75rem', 
+            fontWeight: 800 
+          }}
+        >
+           <LogOut size={16} />
+           <span>SIGN OUT</span>
          </div>
       </div>
     </aside>

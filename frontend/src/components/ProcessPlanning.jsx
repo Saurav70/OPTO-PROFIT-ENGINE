@@ -101,8 +101,10 @@ const FormulaStep = ({ step, index }) => (
 );
 
 /* ─── Main Component ─── */
-const ProcessPlanning = ({ tasks, setTasks, config, optimization }) => {
+const ProcessPlanning = ({ tasks, setTasks, onSaveTasks, config, optimization }) => {
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
   const [showFormulaTrace, setShowFormulaTrace] = useState(true);
   const [showColumnManager, setShowColumnManager] = useState(false);
   const [customColumns, setCustomColumns] = useState(() => {
@@ -179,9 +181,19 @@ const ProcessPlanning = ({ tasks, setTasks, config, optimization }) => {
     document.body.removeChild(link);
   };
 
-  const handleSave = () => {
-    setShowSaveSuccess(true);
-    setTimeout(() => setShowSaveSuccess(false), 3000);
+  const handleSave = async () => {
+    if (!onSaveTasks || isSaving) return;
+    setIsSaving(true);
+    setSaveError('');
+    try {
+      await onSaveTasks(tasks);
+      setShowSaveSuccess(true);
+      setTimeout(() => setShowSaveSuccess(false), 3000);
+    } catch (error) {
+      setSaveError(error?.message || 'Failed to persist process data');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -226,9 +238,14 @@ const ProcessPlanning = ({ tasks, setTasks, config, optimization }) => {
             </motion.div>
           )}
         </AnimatePresence>
-        <button onClick={handleSave} className="btn-primary" style={{ padding: '0.6rem 1.2rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Save size={14} /> SAVE MASTER
+        <button disabled={isSaving} onClick={handleSave} className="btn-primary" style={{ padding: '0.6rem 1.2rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '8px', opacity: isSaving ? 0.65 : 1 }}>
+          <Save size={14} /> {isSaving ? 'SAVING' : 'SAVE MASTER'}
         </button>
+        {saveError && (
+          <div style={{ color: 'var(--accent-danger)', fontSize: '0.72rem', fontWeight: 900, letterSpacing: '0.5px' }}>
+            {saveError}
+          </div>
+        )}
         <button
           onClick={() => setShowColumnManager(v => !v)}
           className="btn-outline"

@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
-import { Activity, Network, Box, Grid, TrendingUp, Save, Info, Cpu, Printer, AlertTriangle, Trash2, FolderOpen, Plus, DollarSign, HelpCircle, X } from 'lucide-react';
+import { Activity, Network, Box, Grid, TrendingUp, Save, Info, Cpu, Printer, AlertTriangle, Trash2, FolderOpen, Plus, HelpCircle, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { calculateTaktTime, calculateNmin, calculateROI, calculateCriticalPath } from '../utils/optimizer';
-import { formatCurrency, getVariable } from '../utils/formulaEngine';
+import { formatCurrency } from '../utils/formulaEngine';
 import FormulaEditor from './FormulaEditor';
 
-const Dashboard = ({ tasks, config, setConfig, onNavigate, profiles, activeProfileId, onSaveProfile, onLoadProfile, onDeleteProfile, optimization }) => {
+const Dashboard = ({ tasks, config, setConfig, onNavigate, profiles, activeProfileId, onSaveProfile, onLoadProfile, onLoadSampleProfile, onDeleteProfile, optimization }) => {
   const [newProfileName, setNewProfileName] = useState('');
   const [editingFormulaKey, setEditingFormulaKey] = useState(null);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('variables'); // 'variables' or 'formulas'
+  const [zoneA, setZoneA] = useState('');
+  const [zoneB, setZoneB] = useState('');
 
   const variables = config?.variables || [];
   const formulas = config?.formulas || {};
@@ -72,30 +74,44 @@ const Dashboard = ({ tasks, config, setConfig, onNavigate, profiles, activeProfi
     setConfig({ ...config, formulas: newFormulas });
   };
 
-  const toggleCurrency = () => {
-    const current = getVariable(variables, 'currency_symbol')?.unit || '₹';
-    const next = current === '₹' ? '$' : '₹';
-    let hasSymbol = false;
-    const newVariables = variables.map(v => {
-      if (v.key === 'currency_symbol') {
-        hasSymbol = true;
-        return { ...v, unit: next };
-      }
-      return v.unit === current ? { ...v, unit: next } : v;
-    });
-    
-    if (!hasSymbol) {
-      newVariables.push({
-        key: 'currency_symbol',
-        label: 'Currency Symbol',
-        value: 0,
-        unit: next,
-        category: 'Financial'
-      });
-    }
-
-    setConfig({ ...config, variables: newVariables });
+  const addZone = () => {
+    const zone = prompt('Enter new zone name:')?.trim();
+    if (!zone || (config.custom_zones || []).includes(zone)) return;
+    setConfig({ ...config, custom_zones: [...(config.custom_zones || []), zone] });
   };
+
+  const removeZone = (zone) => {
+    const nextZones = (config.custom_zones || []).filter(z => z !== zone);
+    const nextExclusions = Object.fromEntries(
+      Object.entries(config.zone_exclusions || {})
+        .filter(([source]) => source !== zone)
+        .map(([source, targets]) => [source, targets.filter(target => target !== zone)])
+        .filter(([, targets]) => targets.length > 0)
+    );
+    setConfig({ ...config, custom_zones: nextZones, zone_exclusions: nextExclusions });
+  };
+
+  const addZoneExclusion = () => {
+    if (!zoneA || !zoneB || zoneA === zoneB) return;
+    const nextExclusions = { ...(config.zone_exclusions || {}) };
+    nextExclusions[zoneA] = [...new Set([...(nextExclusions[zoneA] || []), zoneB])];
+    nextExclusions[zoneB] = [...new Set([...(nextExclusions[zoneB] || []), zoneA])];
+    setConfig({ ...config, zone_exclusions: nextExclusions });
+  };
+
+  const removeZoneExclusion = (left, right) => {
+    const nextExclusions = { ...(config.zone_exclusions || {}) };
+    nextExclusions[left] = (nextExclusions[left] || []).filter(zone => zone !== right);
+    nextExclusions[right] = (nextExclusions[right] || []).filter(zone => zone !== left);
+    Object.keys(nextExclusions).forEach(key => {
+      if (nextExclusions[key].length === 0) delete nextExclusions[key];
+    });
+    setConfig({ ...config, zone_exclusions: nextExclusions });
+  };
+
+  const zoneExclusionPairs = Object.entries(config.zone_exclusions || {})
+    .flatMap(([left, targets]) => targets.map(right => [left, right]))
+    .filter(([left, right]) => left < right);
 
   const containerVariants = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.1 } } };
   const itemVariants = { hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' } } };
@@ -223,9 +239,6 @@ const Dashboard = ({ tasks, config, setConfig, onNavigate, profiles, activeProfi
                 </div>
               </div>
               <div style={{ display: 'flex', gap: '1rem' }}>
-                <button onClick={toggleCurrency} className="btn-outline" style={{ padding: '0.4rem 0.8rem', fontSize: '0.65rem' }}>
-                  TOGGLE CURRENCY
-                </button>
                 <button onClick={() => onNavigate('financials')} style={{ background: 'transparent', border: 'none', color: 'var(--accent-primary)', fontSize: '0.7rem', fontWeight: 900, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', letterSpacing: '1px' }}>
                   FULL ROI REPORT <TrendingUp size={14} />
                 </button>
@@ -242,6 +255,9 @@ const Dashboard = ({ tasks, config, setConfig, onNavigate, profiles, activeProfi
               <h3 className="header-title" style={{ margin: 0, fontSize: '1rem', color: 'var(--accent-primary)' }}>PROJECT PROFILES</h3>
               <p style={{ margin: '4px 0 0 0', fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>Switch between stored configurations</p>
             </div>
+            <button onClick={onLoadSampleProfile} className="btn-outline" style={{ padding: '0.7rem 0.9rem', fontSize: '0.68rem', borderColor: 'var(--accent-primary)', color: 'var(--accent-primary)', zIndex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+              <Cpu size={14} /> LOAD OSCILLOSCOPE SAMPLE
+            </button>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', flex: 1, overflowY: 'auto', maxHeight: '250px', zIndex: 1 }}>
               {profiles.length === 0 ? (
                 <div style={{ padding: '2rem 1rem', textAlign: 'center', background: 'rgba(255,255,255,0.03)', borderRadius: 'var(--radius-md)', border: '1px dashed rgba(255,255,255,0.1)' }}>
@@ -372,26 +388,51 @@ const Dashboard = ({ tasks, config, setConfig, onNavigate, profiles, activeProfi
                           {(config.custom_zones || []).map(zone => (
                             <div key={zone} style={{ background: 'var(--bg-main)', border: '1px solid var(--accent-primary)', color: 'var(--accent-primary)', padding: '4px 12px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
                               {zone}
-                              <X size={12} style={{ cursor: 'pointer' }} onClick={() => {
-                                const next = config.custom_zones.filter(z => z !== zone);
-                                setConfig({ ...config, custom_zones: next });
-                              }} />
+                              <X size={12} style={{ cursor: 'pointer' }} onClick={() => removeZone(zone)} />
                             </div>
                           ))}
                           <button 
-                            onClick={() => {
-                              const zone = prompt('Enter new zone name:');
-                              if (zone) setConfig({ ...config, custom_zones: [...(config.custom_zones || []), zone] });
-                            }}
+                            onClick={addZone}
                             style={{ background: 'var(--accent-primary)20', border: '1px dashed var(--accent-primary)', color: 'var(--accent-primary)', padding: '4px 12px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 700 }}
                           >
                             + ADD ZONE
                           </button>
                         </div>
                       </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) auto', gap: '0.75rem', alignItems: 'end' }}>
+                        <div>
+                          <label style={{ fontSize: '0.65rem', fontWeight: 900, color: 'var(--text-sub)', display: 'block', marginBottom: '0.35rem' }}>ZONE A</label>
+                          <select value={zoneA} onChange={(e) => setZoneA(e.target.value)} className="industrial-input" style={{ width: '100%' }}>
+                            <option value="">Select zone</option>
+                            {(config.custom_zones || []).map(zone => <option key={zone} value={zone}>{zone}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '0.65rem', fontWeight: 900, color: 'var(--text-sub)', display: 'block', marginBottom: '0.35rem' }}>CANNOT SHARE WITH</label>
+                          <select value={zoneB} onChange={(e) => setZoneB(e.target.value)} className="industrial-input" style={{ width: '100%' }}>
+                            <option value="">Select zone</option>
+                            {(config.custom_zones || []).map(zone => <option key={zone} value={zone}>{zone}</option>)}
+                          </select>
+                        </div>
+                        <button onClick={addZoneExclusion} className="btn-primary" style={{ padding: '0.62rem 1rem', fontSize: '0.7rem' }}>
+                          ADD RULE
+                        </button>
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                        {zoneExclusionPairs.length === 0 ? (
+                          <span style={{ fontSize: '0.7rem', color: 'var(--text-sub)', fontWeight: 700 }}>No incompatibility rules defined.</span>
+                        ) : (
+                          zoneExclusionPairs.map(([left, right]) => (
+                            <div key={`${left}-${right}`} style={{ background: 'var(--bg-main)', border: '1px solid var(--accent-warning)', color: 'var(--accent-warning)', padding: '5px 12px', borderRadius: '20px', fontSize: '0.72rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              {left} / {right}
+                              <X size={12} style={{ cursor: 'pointer' }} onClick={() => removeZoneExclusion(left, right)} />
+                            </div>
+                          ))
+                        )}
+                      </div>
                       <div style={{ background: 'rgba(0,0,0,0.05)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
                         <p style={{ margin: 0, fontSize: '0.7rem', color: 'var(--text-sub)' }}>
-                          <strong>Note:</strong> These zones will be available for selection in the <strong>Process Planning</strong> module to define task constraints.
+                          <strong>Note:</strong> Zone incompatibility rules are enforced by the optimizer when tasks are assigned to stations.
                         </p>
                       </div>
                     </div>

@@ -1,18 +1,22 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { LayoutDashboard, Settings, Network, Box, Zap, Grid, TrendingUp } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
+import { LayoutDashboard, Settings, Network, Box, Zap, Grid, TrendingUp, Menu } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from './services/api';
 import Sidebar from './components/Sidebar';
+import SettingsLayout from './components/SettingsLayout';
 
-import Welcome from './components/Welcome';
-import Dashboard from './components/Dashboard';
-import ProcessPlanning from './components/ProcessPlanning';
-import PrecedenceNetwork from './components/PrecedenceNetwork';
-import ConceptualLayout from './components/ConceptualLayout';
-import LineOptimization from './components/LineOptimization';
-import FloorLayout from './components/FloorLayout';
-import FinancialAnalytics from './components/FinancialAnalytics';
+// Lazy-loaded components for performance
+const Welcome = lazy(() => import('./components/Welcome'));
+const Dashboard = lazy(() => import('./components/Dashboard'));
+const ProcessPlanning = lazy(() => import('./components/ProcessPlanning'));
+const ConceptualLayout = lazy(() => import('./components/ConceptualLayout'));
+const LineOptimization = lazy(() => import('./components/LineOptimization'));
+const FinancialAnalytics = lazy(() => import('./components/FinancialAnalytics'));
+const PrecedenceNetwork = lazy(() => import('./components/PrecedenceNetwork'));
+const FloorLayout = lazy(() => import('./components/FloorLayout'));
+
 import { calculateTaktTime, runOptimization } from './utils/optimizer';
+import { oscilloscopeSampleProfile } from './data/sampleProfiles';
 
 const SkeletonLoader = () => (
   <div style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '2rem', height: '100%', overflow: 'hidden' }}>
@@ -52,11 +56,16 @@ const App = () => {
   const [authError, setAuthError] = useState('');
   const [darkMode, setDarkMode] = useState(savedDarkMode ? JSON.parse(savedDarkMode) : false);
   const [isLoading, setIsLoading] = useState(false);
-  const [maxStepReached, setMaxStepReached] = useState(0); 
+  const [maxStepReached, setMaxStepReached] = useState(0);
   const [twoFactorRequired, setTwoFactorRequired] = useState(false); // New state for 2FA
-  
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
   const [tasks, setTasks] = useState([]);
   const [config, setConfig] = useState({});
+  const [dataLoaded, setDataLoaded] = useState(false);
+  const lastSavedTasksJsonRef = useRef('');
+  const autosaveTimerRef = useRef(null);
 
   useEffect(() => {
     const verifySession = async () => {
@@ -97,6 +106,8 @@ const App = () => {
         ]);
         setTasks(tasksData);
         setConfig(configData);
+        lastSavedTasksJsonRef.current = JSON.stringify(tasksData);
+        setDataLoaded(true);
       } catch (err) {
         console.error('Failed to fetch initial data:', err);
       }
@@ -116,7 +127,7 @@ const App = () => {
   // Persistence Effects
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(tasks)); }, [tasks]);
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(config)); }, [config]);
-  useEffect(() => { 
+  useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.DARK_MODE, JSON.stringify(darkMode));
     document.body.classList.toggle('dark-mode', darkMode);
   }, [darkMode]);
@@ -183,16 +194,71 @@ const App = () => {
     }
   }, []);
 
+  const handleSaveTasks = useCallback(async (nextTasks) => {
+    try {
+      const savedTasks = await api.put('/api/tasks', nextTasks);
+      lastSavedTasksJsonRef.current = JSON.stringify(savedTasks);
+      setTasks(savedTasks);
+      return savedTasks;
+    } catch (err) {
+      console.error('Failed to save tasks:', err);
+      throw err;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated || !dataLoaded) return undefined;
+
+    const serializedTasks = JSON.stringify(tasks);
+    if (serializedTasks === lastSavedTasksJsonRef.current) return undefined;
+
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    autosaveTimerRef.current = setTimeout(() => {
+      handleSaveTasks(tasks).catch(() => { });
+    }, 600);
+
+    return () => {
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    };
+  }, [tasks, isAuthenticated, dataLoaded, handleSaveTasks]);
+
   const loadProfile = useCallback(async (id) => {
     const profile = profiles.find(p => p.id === id);
     if (profile) {
       setIsLoading(true);
       setTasks(profile.tasks);
       setConfig(profile.config);
+      lastSavedTasksJsonRef.current = JSON.stringify(profile.tasks);
+      try {
+        await Promise.all([
+          api.put('/api/tasks', profile.tasks),
+          api.put('/api/config', profile.config)
+        ]);
+      } catch (err) {
+        console.error('Failed to persist loaded profile:', err);
+      }
       setActiveProfileId(id);
-      setTimeout(() => setIsLoading(false), 600);
+      setIsLoading(false);
     }
   }, [profiles]);
+
+  const loadSampleProfile = useCallback(async () => {
+    setIsLoading(true);
+    setTasks(oscilloscopeSampleProfile.tasks);
+    setConfig(oscilloscopeSampleProfile.config);
+    lastSavedTasksJsonRef.current = JSON.stringify(oscilloscopeSampleProfile.tasks);
+    try {
+      await Promise.all([
+        api.put('/api/tasks', oscilloscopeSampleProfile.tasks),
+        api.put('/api/config', oscilloscopeSampleProfile.config)
+      ]);
+      setActiveProfileId(oscilloscopeSampleProfile.id);
+    } catch (err) {
+      console.error('Failed to load sample profile:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   const deleteProfile = useCallback(async (id) => {
     try {
@@ -217,12 +283,17 @@ const App = () => {
   const navigateTo = (screen) => {
     if (screen === currentScreen) return;
     const targetIdx = sidebarItems.findIndex(i => i.id === screen);
-    if (targetIdx > maxStepReached + 1) return; 
-    setIsLoading(true);
+    setIsMobileNavOpen(false);
     setCurrentScreen(screen);
     if (targetIdx > maxStepReached) setMaxStepReached(targetIdx);
-    setTimeout(() => setIsLoading(false), 800);
   };
+
+  const handleLogout = useCallback(() => {
+    setIsAuthenticated(false);
+    setCurrentScreen('welcome');
+    setMaxStepReached(0);
+    setTwoFactorRequired(false);
+  }, []);
 
   if (!authChecked) {
     return <div style={{ padding: '2rem' }}>Checking session...</div>;
@@ -231,13 +302,15 @@ const App = () => {
   if (twoFactorRequired) {
     return (
       <div className="welcome-page">
-        <Welcome 
-          onAuthSuccess={handleAuthSuccess} 
-          authError={authError} 
-          setAuthError={setAuthError}
-          twoFactorRequired={true}
-          on2faSuccess={handle2faSuccess}
-        />
+        <Suspense fallback={<SkeletonLoader />}>
+          <Welcome
+            onAuthSuccess={handleAuthSuccess}
+            authError={authError}
+            setAuthError={setAuthError}
+            twoFactorRequired={true}
+            on2faSuccess={handle2faSuccess}
+          />
+        </Suspense>
       </div>
     );
   }
@@ -245,44 +318,77 @@ const App = () => {
   if (!isAuthenticated || currentScreen === 'welcome') {
     return (
       <div className="welcome-page">
-        <Welcome 
-          onAuthSuccess={handleAuthSuccess} 
-          authError={authError} 
-          setAuthError={setAuthError}
-          twoFactorRequired={false}
-          on2faSuccess={handle2faSuccess} // This won't be used but passed for consistency
-        />
+        <Suspense fallback={<SkeletonLoader />}>
+          <Welcome
+            onAuthSuccess={handleAuthSuccess}
+            authError={authError}
+            setAuthError={setAuthError}
+            twoFactorRequired={false}
+            on2faSuccess={handle2faSuccess} // This won't be used but passed for consistency
+          />
+        </Suspense>
       </div>
     );
   }
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: 'var(--bg-main)', color: 'var(--text-main)', transition: 'all 0.3s ease' }}>
-      
-      <Sidebar 
+    <div className="app-shell" style={{ display: 'flex', minHeight: '100vh', backgroundColor: 'var(--bg-main)', color: 'var(--text-main)', transition: 'all 0.3s ease' }}>
+      <button
+        type="button"
+        className="mobile-nav-toggle no-print"
+        onClick={() => setIsMobileNavOpen(true)}
+        aria-label="Open navigation"
+        aria-expanded={isMobileNavOpen}
+      >
+        <Menu size={20} />
+      </button>
+
+      {isMobileNavOpen && (
+        <button
+          type="button"
+          className="sidebar-scrim no-print"
+          aria-label="Close navigation"
+          onClick={() => setIsMobileNavOpen(false)}
+        />
+      )}
+
+      <Sidebar
         sidebarItems={sidebarItems}
         currentScreen={currentScreen}
         maxStepReached={maxStepReached}
         navigateTo={navigateTo}
         darkMode={darkMode}
         setDarkMode={setDarkMode}
+        isMobileOpen={isMobileNavOpen}
+        onCloseMobile={() => setIsMobileNavOpen(false)}
+        onLogout={handleLogout}
+        onOpenSettings={() => setIsSettingsOpen(true)}
       />
 
-      <main style={{ flex: 1, padding: '1.5rem', maxHeight: '100vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      {isSettingsOpen && (
+        <SettingsLayout
+          onClose={() => setIsSettingsOpen(false)}
+          onLogout={handleLogout}
+        />
+      )}
 
-        <div style={{ background: 'var(--card-bg)', borderRadius: '16px', flex: 1, boxShadow: '0 20px 50px rgba(0,0,0,0.05)', border: '1px solid var(--border-color)', position: 'relative', overflow: 'hidden', transition: 'all 0.3s ease' }}>
+      <main className="app-main" style={{ flex: 1, padding: '1.5rem', maxHeight: '100vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+
+        <div className="app-content-card" style={{ background: 'var(--card-bg)', borderRadius: '16px', flex: 1, boxShadow: '0 20px 50px rgba(0,0,0,0.05)', border: '1px solid var(--border-color)', position: 'relative', overflow: 'hidden', transition: 'all 0.3s ease' }}>
           <AnimatePresence mode="wait">
             {isLoading ? (
               <motion.div key="loader" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ width: '100%', height: '100%' }}><SkeletonLoader /></motion.div>
             ) : (
-              <motion.div key={currentScreen} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.3 }} style={{ width: '100%', height: '100%' }}>
-                {currentScreen === 'dashboard' && <Dashboard tasks={tasks} config={config} setConfig={handleSaveConfig} onNavigate={navigateTo} profiles={profiles} activeProfileId={activeProfileId} onSaveProfile={saveProfile} onLoadProfile={loadProfile} onDeleteProfile={deleteProfile} optimization={sharedOptimization} />}
-                {currentScreen === 'planning' && <ProcessPlanning tasks={tasks} setTasks={setTasks} config={config} onNavigate={navigateTo} optimization={sharedOptimization} />}
-                {currentScreen === 'network' && <PrecedenceNetwork tasks={tasks} />}
-                {currentScreen === 'conceptual' && <ConceptualLayout tasks={tasks} config={config} optimization={sharedOptimization} />}
-                {currentScreen === 'optimization' && <LineOptimization tasks={tasks} config={config} optimization={sharedOptimization} />}
-                {currentScreen === 'floor' && <FloorLayout tasks={tasks} config={config} />}
-                {currentScreen === 'financials' && <FinancialAnalytics tasks={tasks} config={config} optimization={sharedOptimization} />}
+              <motion.div className="screen-motion-wrapper" key={currentScreen} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.3 }} style={{ width: '100%', height: '100%' }}>
+                <Suspense fallback={<SkeletonLoader />}>
+                  {currentScreen === 'dashboard' && <Dashboard tasks={tasks} config={config} setConfig={handleSaveConfig} onNavigate={navigateTo} profiles={profiles} activeProfileId={activeProfileId} onSaveProfile={saveProfile} onLoadProfile={loadProfile} onLoadSampleProfile={loadSampleProfile} onDeleteProfile={deleteProfile} optimization={sharedOptimization} />}
+                  {currentScreen === 'planning' && <ProcessPlanning tasks={tasks} setTasks={setTasks} onSaveTasks={handleSaveTasks} config={config} onNavigate={navigateTo} optimization={sharedOptimization} />}
+                  {currentScreen === 'network' && <PrecedenceNetwork tasks={tasks} onNavigate={navigateTo} />}
+                  {currentScreen === 'conceptual' && <ConceptualLayout tasks={tasks} config={config} optimization={sharedOptimization} onNavigate={navigateTo} />}
+                  {currentScreen === 'optimization' && <LineOptimization tasks={tasks} config={config} optimization={sharedOptimization} />}
+                  {currentScreen === 'floor' && <FloorLayout tasks={tasks} config={config} onNavigate={navigateTo} />}
+                  {currentScreen === 'financials' && <FinancialAnalytics tasks={tasks} config={config} optimization={sharedOptimization} />}
+                </Suspense>
               </motion.div>
             )}
           </AnimatePresence>

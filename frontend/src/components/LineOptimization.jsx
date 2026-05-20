@@ -1,21 +1,24 @@
 import React, { useMemo, useState } from 'react';
 import { calculateTaktTime, runOptimization } from '../utils/optimizer';
-import { CheckCircle, AlertTriangle, XCircle } from 'lucide-react';
+import { CheckCircle, AlertTriangle, XCircle, X } from 'lucide-react';
+import { getVariableValue } from '../utils/formulaEngine';
 
 const LineOptimization = ({ tasks, config, optimization: sharedOptimization }) => {
   const taktTime = useMemo(() => calculateTaktTime(config), [config]);
+  const variables = config?.variables || [];
 
   const [heuristic, setHeuristic] = useState('LTF');
   const [targetCycleTime, setTargetCycleTime] = useState(() => {
-    const initialTarget = Number(config.targetCycleTime);
+    const initialTarget = Number(getVariableValue(variables, 'target_cycle_time', 0));
     return Number.isFinite(initialTarget) && initialTarget > 0 ? initialTarget : Math.max(taktTime, 1);
   });
-  const [operators, setOperators] = useState(Math.max(1, Number(config.currentOperators) || 1));
+  const [operators, setOperators] = useState(Math.max(1, Number(getVariableValue(variables, 'current_operators', 1)) || 1));
   const [appliedHeuristic, setAppliedHeuristic] = useState('LTF');
   const [appliedCycleTime, setAppliedCycleTime] = useState(() => {
-    const initialApplied = Number(config.targetCycleTime);
+    const initialApplied = Number(getVariableValue(variables, 'target_cycle_time', 0));
     return Number.isFinite(initialApplied) && initialApplied > 0 ? initialApplied : Math.max(taktTime, 1);
   });
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   // Use shared optimization when cycle time matches takt, otherwise run a custom one
   const usingShared = Math.abs(appliedCycleTime - taktTime) < 0.001 && appliedHeuristic === 'LTF';
@@ -37,10 +40,19 @@ const LineOptimization = ({ tasks, config, optimization: sharedOptimization }) =
     : '0.0';
 
   return (
-    <div style={{ display: 'flex', height: '100%', background: 'var(--bg-main)', color: 'var(--text-white)' }}>
+    <div className="module-layout">
 
-      {/* Controls Sidebar */}
-      <div style={{ width: '320px', padding: '1.5rem', background: 'var(--card-bg)', borderRight: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+      {/* Drawer Scrim — visible on tablet/mobile when drawer is open */}
+      <button
+        type="button"
+        className={`drawer-scrim ${isDrawerOpen ? 'open' : ''}`}
+        aria-label="Close parameters panel"
+        onClick={() => setIsDrawerOpen(false)}
+      />
+
+      {/* Controls — desktop sidebar / tablet side drawer / mobile bottom sheet */}
+      <div className={`module-sidebar module-drawer ${isDrawerOpen ? 'open' : ''}`}>
+        <button className="drawer-close-btn" onClick={() => setIsDrawerOpen(false)}>✕ CLOSE</button>
         <h2 style={{ fontSize: '1rem', fontWeight: 900, marginBottom: '1rem' }}>Optimization Controls</h2>
 
         <label style={{ fontSize: '0.7rem', fontWeight: 900, color: 'var(--text-sub)' }}>Heuristic Selection</label>
@@ -86,7 +98,7 @@ const LineOptimization = ({ tasks, config, optimization: sharedOptimization }) =
       </div>
 
       {/* Main Content */}
-      <div style={{ flex: 1, padding: '2rem', display: 'flex', flexDirection: 'column', gap: '2rem', overflowY: 'auto' }}>
+      <div className="module-main">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem' }}>
           <div>
             <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 900 }}>Optimized Line Layout</h2>
@@ -102,7 +114,7 @@ const LineOptimization = ({ tasks, config, optimization: sharedOptimization }) =
         </div>
 
         {/* KPI Strip */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem' }}>
+        <div className="kpi-grid">
           <div className="glow-card" style={{ padding: '1.25rem' }}>
             <span style={{ fontSize: '0.7rem', color: 'var(--text-sub)' }}>Line Efficiency</span>
             <div style={{ marginTop: '0.35rem', fontSize: '2rem', fontWeight: 900 }}>{optimization.efficiency}%</div>
@@ -122,7 +134,7 @@ const LineOptimization = ({ tasks, config, optimization: sharedOptimization }) =
         </div>
 
         {/* Station Cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem' }}>
           {optimization.stations.map((station, idx) => {
             const idleTime = Math.max(0, appliedCycleTime - station.time);
             const utilization = appliedCycleTime > 0 ? (station.time / appliedCycleTime) * 100 : 0;
@@ -167,7 +179,8 @@ const LineOptimization = ({ tasks, config, optimization: sharedOptimization }) =
               <h4 style={{ margin: 0, fontSize: '0.85rem', fontWeight: 900, color: 'var(--text-white)', letterSpacing: '1px' }}>STATION BALANCE AUDIT</h4>
               <span style={{ fontSize: '0.65rem', color: 'var(--text-sub)', fontWeight: 800 }}>— Mathematical breakdown per workstation</span>
             </div>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+            <div className="table-responsive-wrapper">
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem', minWidth: '700px' }}>
               <thead>
                 <tr style={{ background: 'var(--bg-tertiary)', borderBottom: '1px solid var(--border-color)' }}>
                   {['STATION', 'TASKS', 'PROCESS TIME (P)', 'IDLE TIME (I)', 'LOAD %', 'STATUS'].map(h => (
@@ -222,9 +235,20 @@ const LineOptimization = ({ tasks, config, optimization: sharedOptimization }) =
                 </tr>
               </tfoot>
             </table>
+            </div>
           </div>
         )}
       </div>
+
+      {/* ⚙️ Sticky trigger bar — tablet & mobile only */}
+      <button
+        type="button"
+        className="drawer-toggle-bar"
+        onClick={() => setIsDrawerOpen(true)}
+        aria-label="Open optimization parameters"
+      >
+        ⚙️ ADJUST PARAMETERS
+      </button>
     </div>
   );
 };
