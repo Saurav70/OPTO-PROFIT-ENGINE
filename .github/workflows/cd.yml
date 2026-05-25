@@ -86,6 +86,6 @@ jobs:
 
       - name: Trigger deploy webhook (optional)
         env:
-          DEPLOY_WEBHOOK_URL: ${{ secrets.DEPLOY_WEBHOOK_URL }}
+          DEPLOY_WEBHOOK_URL: ${{ secrets['DEPLOY_WEBHOOK_URL'] }}
         if: env.DEPLOY_WEBHOOK_URL != ''
         run: curl -fsS -X POST "$DEPLOY_WEBHOOK_URL"
