@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, User, Shield, AlertTriangle } from 'lucide-react';
+import { X, User, Shield, AlertTriangle, Sliders } from 'lucide-react';
 import { api } from '../services/api';
-import { AccountInfoTab, PersonalInfoTab, SecurityTab } from './SettingsTabs';
+import { AccountInfoTab, PersonalInfoTab, SecurityTab, PreferencesTab } from './SettingsTabs';
 
 const SettingsLayout = ({ onClose, onLogout }) => {
   const [activeTab, setActiveTab] = useState('account');
@@ -48,7 +48,8 @@ const SettingsLayout = ({ onClose, onLogout }) => {
   const tabs = [
     { id: 'account', label: 'ACCOUNT', icon: User },
     { id: 'personal', label: 'PERSONAL', icon: User },
-    { id: 'security', label: 'SECURITY', icon: Shield }
+    { id: 'security', label: 'SECURITY', icon: Shield },
+    { id: 'preferences', label: 'PREFERENCES', icon: Sliders }
   ];
 
   return (
@@ -186,6 +187,7 @@ const SettingsLayout = ({ onClose, onLogout }) => {
                   />
                 )}
                 {activeTab === 'security' && <SecurityTab onLogout={onLogout} />}
+                {activeTab === 'preferences' && <PreferencesTab setHasUnsavedChanges={setHasUnsavedChanges} />}
               </div>
             )}
           </div>

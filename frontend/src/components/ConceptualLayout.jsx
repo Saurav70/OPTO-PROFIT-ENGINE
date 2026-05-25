@@ -98,69 +98,70 @@ const ConceptualLayout = ({ tasks, config, optimization, onNavigate }) => {
             Add process tasks and production targets to generate the station layout.
           </div>
         ) : (
-          <div className="conceptual-station-grid">
-            {stations.map((station, idx) => {
-              const Icon = getStationIcon(idx);
-              const processMinutes = Number(station.time) || 0;
-              const idleMinutes = Math.max(0, taktTime - processMinutes);
-              const processPercent = taktTime > 0 ? clampPercent((processMinutes / taktTime) * 100) : 0;
-              const idlePercent = taktTime > 0 ? clampPercent((idleMinutes / taktTime) * 100) : 0;
-              const isLast = idx === stations.length - 1;
+          <>
+            <div className="conceptual-station-grid">
+              {stations.map((station, idx) => {
+                const Icon = getStationIcon(idx);
+                const processMinutes = Number(station.time) || 0;
+                const idleMinutes = Math.max(0, taktTime - processMinutes);
+                const processPercent = taktTime > 0 ? clampPercent((processMinutes / taktTime) * 100) : 0;
+                const idlePercent = taktTime > 0 ? clampPercent((idleMinutes / taktTime) * 100) : 0;
+                const isLast = idx === stations.length - 1;
 
-              return (
-                <motion.article
-                  key={`station-${idx}`}
-                  initial={{ y: 16, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  transition={{ delay: idx * 0.06 }}
-                  className={`conceptual-station-card ${isLast ? 'final-station' : ''}`}
-                >
-                  <div className="conceptual-station-top">
-                    <div className="conceptual-station-id">
-                      <Icon size={18} />
-                      <span>Station {idx + 1}</span>
-                    </div>
-                    {isLast ? (
-                      <span className="conceptual-final-badge">
-                        <Star size={12} fill="currentColor" /> Final
-                      </span>
-                    ) : (
-                      <ArrowRight size={16} className="conceptual-flow-icon" />
-                    )}
-                  </div>
-
-                  <div className="conceptual-task-list">
-                    {station.tasks.map((task) => (
-                      <div key={task.id} className="conceptual-task-row">
-                        <span>{task.id}</span>
-                        <p>{task.name}</p>
-                        <strong>{Number(task.time || 0).toFixed(1)}m</strong>
+                return (
+                  <motion.article
+                    key={`station-${idx}`}
+                    initial={{ y: 16, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    transition={{ delay: idx * 0.06 }}
+                    className={`conceptual-station-card ${isLast ? 'final-station' : ''}`}
+                  >
+                    <div className="conceptual-station-top">
+                      <div className="conceptual-station-id">
+                        <Icon size={18} />
+                        <span>Station {idx + 1}</span>
                       </div>
-                    ))}
-                  </div>
+                      {isLast ? (
+                        <span className="conceptual-final-badge">
+                          <Star size={12} fill="currentColor" /> Final
+                        </span>
+                      ) : (
+                        <ArrowRight size={16} className="conceptual-flow-icon" />
+                      )}
+                    </div>
 
-                  <div className="conceptual-load-block">
-                    <div className="conceptual-load-meta">
-                      <span>P: {processMinutes.toFixed(1)}m</span>
-                      <span>I: {idleMinutes.toFixed(1)}m</span>
+                    <div className="conceptual-task-list">
+                      {station.tasks.map((task) => (
+                        <div key={task.id} className="conceptual-task-row">
+                          <span>{task.id}</span>
+                          <p>{task.name}</p>
+                          <strong>{Number(task.time || 0).toFixed(1)}m</strong>
+                        </div>
+                      ))}
                     </div>
-                    <div className="conceptual-load-bar" aria-label={`Station ${idx + 1} load`}>
-                      <div className="processing" style={{ width: `${processPercent}%` }} />
-                      <div className="idle" style={{ width: `${idlePercent}%` }} />
+
+                    <div className="conceptual-load-block">
+                      <div className="conceptual-load-meta">
+                        <span>P: {processMinutes.toFixed(1)}m</span>
+                        <span>I: {idleMinutes.toFixed(1)}m</span>
+                      </div>
+                      <div className="conceptual-load-bar" aria-label={`Station ${idx + 1} load`}>
+                        <div className="processing" style={{ width: `${processPercent}%` }} />
+                        <div className="idle" style={{ width: `${idlePercent}%` }} />
+                      </div>
                     </div>
-                  </div>
-                </motion.article>
-              );
-            })}
-          </div>
+                  </motion.article>
+                );
+              })}
+            </div>
+            <footer className="conceptual-footer">
+              <span>Optimized Flow</span>
+              <span>Zero Waste</span>
+              <span>Balanced Workload</span>
+            </footer>
+          </>
         )}
       </section>
-
-      <footer className="conceptual-footer">
-        <span>Optimized Flow</span>
-        <span>Zero Waste</span>
-        <span>Balanced Workload</span>
-      </footer>
     </motion.div>
   );
 };

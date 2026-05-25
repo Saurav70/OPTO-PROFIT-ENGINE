@@ -223,16 +223,7 @@ const PrecedenceNetwork = ({ tasks = [], onNavigate }) => {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      style={{ 
-        display: 'flex', 
-        flexDirection: 'column', 
-        height: '100%', 
-        background: 'var(--bg-main)',
-        borderRadius: 'var(--radius-lg)',
-        overflow: 'hidden',
-        border: '1px solid var(--border-color)',
-        transition: 'var(--transition-smooth)'
-      }}
+      className="precedence-container"
     >
       <div style={{ padding: '1.5rem 2rem 0 2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
@@ -241,7 +232,7 @@ const PrecedenceNetwork = ({ tasks = [], onNavigate }) => {
         </div>
       </div>
 
-      <div style={{ padding: '1.5rem', display: 'flex', gap: '1.5rem', flexShrink: 0, background: 'var(--card-bg)', borderBottom: '1px solid var(--border-color)' }}>
+      <div className="precedence-stats-bar">
          <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '0.8rem 1.5rem', display: 'flex', alignItems: 'center', gap: '12px', transition: 'var(--transition-fast)' }}>
             <div style={{ padding: '0.6rem', background: 'rgba(13, 148, 136, 0.1)', borderRadius: 'var(--radius-sm)' }}>
               <Info size={18} color="var(--accent-primary)" />
@@ -274,7 +265,7 @@ const PrecedenceNetwork = ({ tasks = [], onNavigate }) => {
 
       </div>
 
-      <div style={{ flex: 1, position: 'relative' }}>
+      <div className="precedence-flow-wrapper">
         <ReactFlow
           nodes={initialNodes}
           edges={initialEdges}

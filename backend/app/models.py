@@ -1,5 +1,5 @@
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 from typing import List, Optional, Dict, Any
 
 
@@ -23,6 +23,7 @@ class Config(BaseModel):
     # e.g., ["Wet-Zone", "High-Voltage", "Clean-Room"]
     zone_exclusions: Dict[str, List[str]] = {}
     # e.g., {"Wet-Zone": ["High-Voltage"]} means those zones can't share a station
+    target_efficiency: Optional[int] = 85
 
 
 # ── Flexible Task Model ──────────────────────────────────────────
@@ -50,26 +51,26 @@ class User(BaseModel):
     id: str = Field(alias="_id")
     username: str
     username_normalized: str
-    email: Optional[str] = None
+    email: Optional[EmailStr] = None
     password_hash: str
     created_at: datetime
     is_2fa_enabled: Optional[bool] = False
     two_factor_secret: Optional[str] = None
-    full_name: Optional[str] = None
-    phone_number: Optional[str] = None
-    role: Optional[str] = "User"
-    tenant_id: Optional[str] = None
+    full_name: Optional[str] = Field(default=None, max_length=100)
+    phone_number: Optional[str] = Field(default=None, max_length=20)
+    role: Optional[str] = Field(default="User", max_length=50)
+    tenant_id: Optional[str] = Field(default=None, max_length=20)
 
 
 class RegisterRequest(BaseModel):
-    username: str
-    password: str
-    email: Optional[str] = None
+    username: str = Field(min_length=3, max_length=50)
+    password: str = Field(min_length=8, max_length=128)
+    email: Optional[EmailStr] = None
 
 
 class LoginRequest(BaseModel):
-    username: str
-    password: str
+    username: str = Field(max_length=50)
+    password: str = Field(max_length=128)
 
 
 class AuthTokenResponse(BaseModel):
@@ -81,7 +82,7 @@ class AuthTokenResponse(BaseModel):
 class AuthUserResponse(BaseModel):
     id: str
     username: str
-    email: Optional[str] = None
+    email: Optional[EmailStr] = None
     is_2fa_enabled: Optional[bool] = False
     full_name: Optional[str] = None
     phone_number: Optional[str] = None
@@ -90,23 +91,23 @@ class AuthUserResponse(BaseModel):
     created_at: Optional[datetime] = None
 
 class UpdateUserRequest(BaseModel):
-    full_name: Optional[str] = None
-    phone_number: Optional[str] = None
-    email: Optional[str] = None
+    full_name: Optional[str] = Field(default=None, max_length=100)
+    phone_number: Optional[str] = Field(default=None, max_length=20)
+    email: Optional[EmailStr] = None
 
 class ChangePasswordRequest(BaseModel):
-    current_password: str
-    new_password: str
-    confirm_password: str
+    current_password: str = Field(max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
+    confirm_password: str = Field(max_length=128)
 
 
 class ForgotPasswordRequest(BaseModel):
-    email: str
+    email: EmailStr
 
 
 class ResetPasswordRequest(BaseModel):
-    token: str
-    new_password: str
+    token: str = Field(max_length=200)
+    new_password: str = Field(min_length=8, max_length=128)
 
 
 class TwoFactorSetupResponse(BaseModel):

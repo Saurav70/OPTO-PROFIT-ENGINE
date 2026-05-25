@@ -289,3 +289,72 @@ export const SecurityTab = ({ onLogout }) => {
     </div>
   );
 };
+
+export const PreferencesTab = ({ setHasUnsavedChanges }) => {
+  const [globalTarget, setGlobalTarget] = useState(() => {
+    return Number(localStorage.getItem('opto_global_target_efficiency')) || 85;
+  });
+  const [status, setStatus] = useState({ type: '', message: '' });
+
+  const handleSave = () => {
+    localStorage.setItem('opto_global_target_efficiency', globalTarget.toString());
+    setStatus({ type: 'success', message: 'Preferences updated successfully.' });
+    setHasUnsavedChanges(false);
+  };
+
+  return (
+    <div className="settings-tab-content">
+      <h3 style={{ margin: '0 0 1.5rem 0', color: 'var(--text-white)', fontSize: '1.2rem', fontWeight: 800 }}>GLOBAL SYSTEM DEFAULTS</h3>
+      
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', maxWidth: '400px' }}>
+        <div className="settings-field-group">
+          <label className="input-label">GLOBAL TARGET EFFICIENCY (%)</label>
+          <input 
+            type="number" 
+            min="10"
+            max="100"
+            className="input-field" 
+            value={globalTarget} 
+            onChange={(e) => {
+              setGlobalTarget(Math.min(100, Math.max(10, Number(e.target.value) || 85)));
+              setHasUnsavedChanges(true);
+              setStatus({ type: '', message: '' });
+            }} 
+            placeholder="85" 
+          />
+          <span style={{ fontSize: '0.65rem', color: 'var(--text-sub)', marginTop: '4px', display: 'block' }}>
+            This target efficiency will be applied globally across all active projects as the default line-balancing baseline.
+          </span>
+        </div>
+
+        {status.message && (
+          <div style={{ 
+            padding: '10px 12px', 
+            borderRadius: '6px', 
+            fontSize: '0.8rem', 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '8px',
+            background: 'rgba(13, 148, 136, 0.1)',
+            color: 'var(--accent-primary)',
+            border: '1px solid var(--accent-primary)'
+          }}>
+            <CheckCircle2 size={16} />
+            {status.message}
+          </div>
+        )}
+
+        <button 
+          className="btn-primary" 
+          onClick={handleSave}
+          style={{ marginTop: '1rem', alignSelf: 'flex-start' }}
+        >
+          <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Save size={16} />
+            SAVE PREFERENCES
+          </span>
+        </button>
+      </div>
+    </div>
+  );
+};

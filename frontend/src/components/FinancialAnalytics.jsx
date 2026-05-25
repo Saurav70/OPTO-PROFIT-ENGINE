@@ -109,7 +109,7 @@ const FinancialAnalytics = ({ tasks, config, optimization }) => {
       <div style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '2rem', overflowY: 'auto' }}>
 
         {/* Metric Strip */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1.5rem' }}>
+        <div className="kpi-grid">
           {stats.map((m, i) => (
             <div key={i} style={{ background: 'var(--card-bg)', padding: '1.5rem', borderRadius: '8px', border: '1px solid var(--border-color)', borderLeft: `4px solid ${m.color}`, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', display: 'flex', flexDirection: 'column', gap: '10px', transition: 'all 0.3s ease' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -121,7 +121,7 @@ const FinancialAnalytics = ({ tasks, config, optimization }) => {
           ))}
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '2rem' }}>
+        <div className="grid-2fr-1fr">
 
           {/* Profitability Chart Panel */}
           <div style={{ background: 'var(--card-bg)', borderRadius: '12px', border: '1px solid var(--border-color)', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', overflow: 'hidden', display: 'flex', flexDirection: 'column', transition: 'all 0.3s ease' }}>
@@ -224,7 +224,7 @@ const FinancialAnalytics = ({ tasks, config, optimization }) => {
             <h4 style={{ margin: 0, fontSize: '0.85rem', fontWeight: 900, color: 'var(--text-white)' }}>OPERATIONAL COST AUDIT</h4>
             <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-sub)' }}>{new Date().toLocaleDateString()}</div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1px', background: 'var(--border-color)' }}>
+          <div className="audit-grid">
             {[
               { label: 'LABOR EFFICIENCY', val: `${optimization?.efficiency || '0.00'}%`, status: 'OPTIMAL' },
               { label: 'BALANCE DELAY', val: `${optimization?.balanceDelay || '0.00'}%`, status: 'REDUCED' },

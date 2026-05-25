@@ -1,5 +1,5 @@
 const DEFAULT_TIMEOUT_MS = 15000;
-const BASE_URL = 'http://localhost:8000';
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 const AUTH_TOKEN_KEY = 'opto_auth_token';
 const TEMP_2FA_TOKEN_KEY = 'opto_2fa_temp_token'; // New key for temporary 2FA token
 
@@ -40,6 +40,9 @@ const parseResponseBody = async (response) => {
 
 const normalizeFailure = ({ error, response, url, method }) => {
   if (response) {
+    if (response.status === 401) {
+      window.dispatchEvent(new CustomEvent('opto-unauthorized'));
+    }
     const fallback = `Request failed with status ${response.status}`;
     const data = error;
     const message =

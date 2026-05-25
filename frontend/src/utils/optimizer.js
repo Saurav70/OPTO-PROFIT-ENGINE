@@ -4,6 +4,7 @@
  */
 
 import { buildContext, evaluateFormula, getVariableValue } from './formulaEngine';
+import { TARGET_EFFICIENCY } from './defaults';
 
 /* ─── Private Helpers ─── */
 const toFiniteNumber = (value, fallback = 0) => {
@@ -205,6 +206,10 @@ export const runOptimization = (tasks, taktTime, heuristic = 'LTF', config = {})
     ? Math.sqrt(stations.reduce((sum, s) => sum + Math.pow(actualCycleTime - s.time, 2), 0))
     : 0;
 
+  const activeTarget = config?.target_efficiency !== undefined && config?.target_efficiency !== null ? Number(config.target_efficiency) : null;
+  const globalTarget = typeof window !== 'undefined' && window.localStorage ? (Number(window.localStorage.getItem('opto_global_target_efficiency')) || TARGET_EFFICIENCY) : TARGET_EFFICIENCY;
+  const targetEfficiency = activeTarget !== null && !isNaN(activeTarget) ? activeTarget : globalTarget;
+
   return {
     stations,
     efficiency: efficiency.toFixed(2),
@@ -213,7 +218,9 @@ export const runOptimization = (tasks, taktTime, heuristic = 'LTF', config = {})
     actualCycleTime,
     totalIdleTime: totalIdleTime > 0 ? totalIdleTime : 0,
     totalTaskTime,
-    smoothnessIndex: smoothnessIndex.toFixed(2)
+    smoothnessIndex: smoothnessIndex.toFixed(2),
+    meetsTarget: efficiency >= targetEfficiency,
+    targetEfficiency: targetEfficiency
   };
 };
 

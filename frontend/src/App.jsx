@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { api } from './services/api';
 import Sidebar from './components/Sidebar';
 import SettingsLayout from './components/SettingsLayout';
+import ErrorBoundary from './components/ErrorBoundary';
 
 // Lazy-loaded components for performance
 const Welcome = lazy(() => import('./components/Welcome'));
@@ -289,11 +290,25 @@ const App = () => {
   };
 
   const handleLogout = useCallback(() => {
+    api.auth.clearToken();
     setIsAuthenticated(false);
     setCurrentScreen('welcome');
     setMaxStepReached(0);
     setTwoFactorRequired(false);
+    setDataLoaded(false);
+    setTasks([]);
+    setConfig({});
   }, []);
+
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      handleLogout();
+    };
+    window.addEventListener('opto-unauthorized', handleUnauthorized);
+    return () => {
+      window.removeEventListener('opto-unauthorized', handleUnauthorized);
+    };
+  }, [handleLogout]);
 
   if (!authChecked) {
     return <div style={{ padding: '2rem' }}>Checking session...</div>;
@@ -380,15 +395,17 @@ const App = () => {
               <motion.div key="loader" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ width: '100%', height: '100%' }}><SkeletonLoader /></motion.div>
             ) : (
               <motion.div className="screen-motion-wrapper" key={currentScreen} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.3 }} style={{ width: '100%', height: '100%' }}>
+                <ErrorBoundary key={`eb-${currentScreen}`}>
                 <Suspense fallback={<SkeletonLoader />}>
                   {currentScreen === 'dashboard' && <Dashboard tasks={tasks} config={config} setConfig={handleSaveConfig} onNavigate={navigateTo} profiles={profiles} activeProfileId={activeProfileId} onSaveProfile={saveProfile} onLoadProfile={loadProfile} onLoadSampleProfile={loadSampleProfile} onDeleteProfile={deleteProfile} optimization={sharedOptimization} />}
                   {currentScreen === 'planning' && <ProcessPlanning tasks={tasks} setTasks={setTasks} onSaveTasks={handleSaveTasks} config={config} onNavigate={navigateTo} optimization={sharedOptimization} />}
                   {currentScreen === 'network' && <PrecedenceNetwork tasks={tasks} onNavigate={navigateTo} />}
                   {currentScreen === 'conceptual' && <ConceptualLayout tasks={tasks} config={config} optimization={sharedOptimization} onNavigate={navigateTo} />}
-                  {currentScreen === 'optimization' && <LineOptimization tasks={tasks} config={config} optimization={sharedOptimization} />}
+                  {currentScreen === 'optimization' && <LineOptimization tasks={tasks} config={config} setConfig={handleSaveConfig} optimization={sharedOptimization} />}
                   {currentScreen === 'floor' && <FloorLayout tasks={tasks} config={config} onNavigate={navigateTo} />}
                   {currentScreen === 'financials' && <FinancialAnalytics tasks={tasks} config={config} optimization={sharedOptimization} />}
                 </Suspense>
+                </ErrorBoundary>
               </motion.div>
             )}
           </AnimatePresence>

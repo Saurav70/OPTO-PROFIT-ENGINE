@@ -307,7 +307,7 @@ const ProcessPlanning = ({ tasks, setTasks, onSaveTasks, config, optimization })
       </AnimatePresence>
 
       {/* Body: Table + Formula Panel */}
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+      <div className="planning-body-flow">
 
         {/* Main Table */}
         <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg-main)', padding: '2rem' }}>
@@ -322,66 +322,68 @@ const ProcessPlanning = ({ tasks, setTasks, onSaveTasks, config, optimization })
           )}
 
           <div className="glow-card">
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
-              <thead>
-                <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)' }}>
-                  <th style={{ padding: '1rem 1.5rem', color: 'var(--text-sub)', fontWeight: 900, width: '80px', letterSpacing: '1px' }}>ID</th>
-                  <th style={{ padding: '1rem 1.5rem', color: 'var(--text-sub)', fontWeight: 900, letterSpacing: '1px' }}>TASK IDENTIFICATION &amp; DESCRIPTION</th>
-                  <th style={{ padding: '1rem 1.5rem', color: 'var(--text-sub)', fontWeight: 900, width: '120px', letterSpacing: '1px' }}>TIME (MIN)</th>
-                  <th style={{ padding: '1rem 1.5rem', color: 'var(--text-sub)', fontWeight: 900, width: '200px', letterSpacing: '1px' }}>PREDECESSORS</th>
-                  <th style={{ padding: '1rem 1.5rem', color: 'var(--text-sub)', fontWeight: 900, width: '160px', letterSpacing: '1px' }}>ZONING</th>
-                  {customColumns.map(col => (
-                    <th key={col.key} style={{ padding: '1rem 1.5rem', color: 'var(--accent-secondary)', fontWeight: 900, width: '140px', letterSpacing: '1px', fontSize: '0.75rem' }}>{col.label.toUpperCase()}</th>
-                  ))}
-                  <th style={{ padding: '1rem 1.5rem', color: 'var(--text-sub)', fontWeight: 900, textAlign: 'right', width: '80px', letterSpacing: '1px' }}>OP</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tasks.map((task) => {
-                  const taskError = errors.find(e => e.taskId === task.id || (e.cycle && e.cycle.includes(task.id)));
-                  return (
-                    <tr key={task.id} style={{ borderBottom: '1px solid var(--border-color)', background: taskError ? 'rgba(239, 68, 68, 0.05)' : 'transparent', transition: 'background 0.2s' }}>
-                      <td style={{ padding: '1rem 1.5rem', fontWeight: 900, color: taskError ? 'var(--accent-danger)' : 'var(--accent-primary)', fontSize: '1.1rem' }}>{task.id}</td>
-                      <td style={{ padding: '1rem 1.5rem' }}>
-                        <input value={task.name} onChange={(e) => updateTask(task.id, 'name', e.target.value)} style={{ background: 'transparent', border: 'none', color: 'var(--text-white)', width: '100%', outline: 'none', fontWeight: 700, fontSize: '0.9rem' }} />
-                      </td>
-                      <td style={{ padding: '1rem 1.5rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-tertiary)', padding: '6px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)' }}>
-                          <input type="number" value={task.time} onChange={(e) => updateTask(task.id, 'time', parseFloat(e.target.value) || 0)} style={{ background: 'transparent', border: 'none', color: 'var(--text-white)', width: '45px', outline: 'none', fontWeight: 900, textAlign: 'right', fontSize: '0.85rem' }} />
-                          <span style={{ fontSize: '0.65rem', color: 'var(--text-sub)', fontWeight: 900 }}>MIN</span>
-                        </div>
-                      </td>
-                      <td style={{ padding: '1rem 1.5rem' }}>
-                        <PredecessorInput value={task.predecessors} tasks={tasks} currentId={task.id} isError={!!taskError} onUpdate={(val) => updateTask(task.id, 'predecessors', val)} />
-                      </td>
-                      <td style={{ padding: '1rem 1.5rem' }}>
-                        <select value={task.zoning || 'None'} onChange={(e) => updateTask(task.id, 'zoning', e.target.value)} style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)', padding: '6px 10px', borderRadius: 'var(--radius-sm)', color: 'var(--text-white)', fontSize: '0.75rem', fontWeight: 900, outline: 'none', width: '100%' }}>
-                          <option value="None">None</option>
-                          {(config.custom_zones || []).map(zone => (
-                            <option key={zone} value={zone}>{zone}</option>
-                          ))}
-                        </select>
-                      </td>
-                      {customColumns.map(col => (
-                        <td key={col.key} style={{ padding: '0.75rem 1.5rem' }}>
-                          <input
-                            type={col.type}
-                            value={task.custom_attributes?.[col.key] ?? (col.type === 'number' ? 0 : '')}
-                            onChange={e => updateCustomAttr(task.id, col.key, col.type === 'number' ? parseFloat(e.target.value) || 0 : e.target.value)}
-                            style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)', color: 'var(--accent-secondary)', padding: '6px 8px', borderRadius: '4px', width: '100%', outline: 'none', fontSize: '0.8rem', fontWeight: 700 }}
-                          />
+            <div className="table-responsive-wrapper">
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
+                <thead>
+                  <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)' }}>
+                    <th style={{ padding: '1rem 1.5rem', color: 'var(--text-sub)', fontWeight: 900, width: '80px', letterSpacing: '1px' }}>ID</th>
+                    <th style={{ padding: '1rem 1.5rem', color: 'var(--text-sub)', fontWeight: 900, letterSpacing: '1px' }}>TASK IDENTIFICATION &amp; DESCRIPTION</th>
+                    <th style={{ padding: '1rem 1.5rem', color: 'var(--text-sub)', fontWeight: 900, width: '120px', letterSpacing: '1px' }}>TIME (MIN)</th>
+                    <th style={{ padding: '1rem 1.5rem', color: 'var(--text-sub)', fontWeight: 900, width: '200px', letterSpacing: '1px' }}>PREDECESSORS</th>
+                    <th style={{ padding: '1rem 1.5rem', color: 'var(--text-sub)', fontWeight: 900, width: '160px', letterSpacing: '1px' }}>ZONING</th>
+                    {customColumns.map(col => (
+                      <th key={col.key} style={{ padding: '1rem 1.5rem', color: 'var(--accent-secondary)', fontWeight: 900, width: '140px', letterSpacing: '1px', fontSize: '0.75rem' }}>{col.label.toUpperCase()}</th>
+                    ))}
+                    <th style={{ padding: '1rem 1.5rem', color: 'var(--text-sub)', fontWeight: 900, textAlign: 'right', width: '80px', letterSpacing: '1px' }}>OP</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tasks.map((task) => {
+                    const taskError = errors.find(e => e.taskId === task.id || (e.cycle && e.cycle.includes(task.id)));
+                    return (
+                      <tr key={task.id} style={{ borderBottom: '1px solid var(--border-color)', background: taskError ? 'rgba(239, 68, 68, 0.05)' : 'transparent', transition: 'background 0.2s' }}>
+                        <td style={{ padding: '1rem 1.5rem', fontWeight: 900, color: taskError ? 'var(--accent-danger)' : 'var(--accent-primary)', fontSize: '1.1rem' }}>{task.id}</td>
+                        <td style={{ padding: '1rem 1.5rem' }}>
+                          <input value={task.name} onChange={(e) => updateTask(task.id, 'name', e.target.value)} style={{ background: 'transparent', border: 'none', color: 'var(--text-white)', width: '100%', outline: 'none', fontWeight: 700, fontSize: '0.9rem' }} />
                         </td>
-                      ))}
-                      <td style={{ padding: '1rem 1.5rem', textAlign: 'right' }}>
-                        <button onClick={() => removeTask(task.id)} style={{ background: 'transparent', color: 'var(--text-sub)', border: 'none', cursor: 'pointer', transition: 'color 0.2s' }} onMouseEnter={(e) => e.target.style.color = 'var(--accent-danger)'} onMouseLeave={(e) => e.target.style.color = 'var(--text-sub)'}>
-                          <Trash2 size={16} />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                        <td style={{ padding: '1rem 1.5rem' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-tertiary)', padding: '6px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)' }}>
+                            <input type="number" value={task.time} onChange={(e) => updateTask(task.id, 'time', parseFloat(e.target.value) || 0)} style={{ background: 'transparent', border: 'none', color: 'var(--text-white)', width: '45px', outline: 'none', fontWeight: 900, textAlign: 'right', fontSize: '0.85rem' }} />
+                            <span style={{ fontSize: '0.65rem', color: 'var(--text-sub)', fontWeight: 900 }}>MIN</span>
+                          </div>
+                        </td>
+                        <td style={{ padding: '1rem 1.5rem' }}>
+                          <PredecessorInput value={task.predecessors} tasks={tasks} currentId={task.id} isError={!!taskError} onUpdate={(val) => updateTask(task.id, 'predecessors', val)} />
+                        </td>
+                        <td style={{ padding: '1rem 1.5rem' }}>
+                          <select value={task.zoning || 'None'} onChange={(e) => updateTask(task.id, 'zoning', e.target.value)} style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)', padding: '6px 10px', borderRadius: 'var(--radius-sm)', color: 'var(--text-white)', fontSize: '0.75rem', fontWeight: 900, outline: 'none', width: '100%' }}>
+                            <option value="None">None</option>
+                            {(config.custom_zones || []).map(zone => (
+                              <option key={zone} value={zone}>{zone}</option>
+                            ))}
+                          </select>
+                        </td>
+                        {customColumns.map(col => (
+                          <td key={col.key} style={{ padding: '0.75rem 1.5rem' }}>
+                            <input
+                              type={col.type}
+                              value={task.custom_attributes?.[col.key] ?? (col.type === 'number' ? 0 : '')}
+                              onChange={e => updateCustomAttr(task.id, col.key, col.type === 'number' ? parseFloat(e.target.value) || 0 : e.target.value)}
+                              style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)', color: 'var(--accent-secondary)', padding: '6px 8px', borderRadius: '4px', width: '100%', outline: 'none', fontSize: '0.8rem', fontWeight: 700 }}
+                            />
+                          </td>
+                        ))}
+                        <td style={{ padding: '1rem 1.5rem', textAlign: 'right' }}>
+                          <button onClick={() => removeTask(task.id)} style={{ background: 'transparent', color: 'var(--text-sub)', border: 'none', cursor: 'pointer', transition: 'color 0.2s' }} onMouseEnter={(e) => e.target.style.color = 'var(--accent-danger)'} onMouseLeave={(e) => e.target.style.color = 'var(--text-sub)'}>
+                            <Trash2 size={16} />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
             <div style={{ padding: '1.5rem', background: 'var(--bg-secondary)', display: 'flex', justifyContent: 'center' }}>
               <motion.button whileHover={{ scale: 1.02, backgroundColor: 'var(--bg-tertiary)' }} whileTap={{ scale: 0.98 }} onClick={addTask} style={{ background: 'transparent', border: '1px dashed var(--text-sub)', color: 'var(--text-sub)', padding: '0.8rem 2.5rem', borderRadius: 'var(--radius-md)', fontSize: '0.75rem', fontWeight: 900, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', letterSpacing: '1px' }}>
                 <Plus size={18} /> APPEND NEW PROCESS STEP

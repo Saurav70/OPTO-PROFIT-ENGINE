@@ -10,7 +10,7 @@ export default defineConfig({
         manualChunks: {
           'vendor-react': ['react', 'react-dom'],
           'vendor-ui': ['recharts', '@xyflow/react', 'lucide-react', 'framer-motion'],
-          'vendor-utils': ['mathjs', 'pdf-parse', 'pdfjs-dist']
+          'vendor-utils': ['mathjs']
         }
       }
     },

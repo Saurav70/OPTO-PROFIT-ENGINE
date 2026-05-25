@@ -1,8 +1,9 @@
 import ast
 import operator
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, Header, HTTPException
 from typing import Dict, Any
+from datetime import timezone
 
 router = APIRouter(prefix="/api/analytics", tags=["Analytics"])
 
@@ -113,8 +114,31 @@ def evaluate_formula(formula: str | None, context: Dict[str, float]) -> float:
     except Exception:
         return 0
 
+# ── Auth dependency (duplicated to avoid circular import from main) ──
+async def _require_user_for_analytics(authorization: str | None = Header(default=None)) -> dict:
+    """Lightweight auth guard for the analytics router."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid authorization header")
+    # Import at call time to avoid circular dependency
+    from ..main import _hash_token, _utc_now, app as main_app
+    import hashlib
+    token = authorization.split(" ", 1)[1].strip()
+    if not token:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    token_hash = _hash_token(token)
+    session = await main_app.database["sessions"].find_one({"token_hash": token_hash})
+    if not session:
+        raise HTTPException(status_code=401, detail="Session not found")
+    expires_at = session.get("expires_at")
+    if expires_at and expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if not expires_at or expires_at < _utc_now():
+        raise HTTPException(status_code=401, detail="Session expired")
+    return session
+
+
 @router.post("/roi")
-async def get_roi_impact(payload: Dict[str, Any]):
+async def get_roi_impact(payload: Dict[str, Any], _user: dict = Depends(_require_user_for_analytics)):
     """
     Dynamic ROI calculation aligned to the frontend variable/formula model.
     """
@@ -146,7 +170,7 @@ async def get_roi_impact(payload: Dict[str, Any]):
     def daily_output(cycle_time: float) -> float:
         if shift_time <= 0 or cycle_time <= 0 or demand <= 0:
             return 0
-        return min(demand, shift_time // cycle_time)
+        return min(demand, int((shift_time / cycle_time) + 1e-9))
 
     baseline_daily_production = daily_output(current_cycle_time)
     optimized_daily_production = daily_output(optimized_cycle_time)

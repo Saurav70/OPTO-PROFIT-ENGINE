@@ -138,7 +138,7 @@ const Dashboard = ({ tasks, config, setConfig, onNavigate, profiles, activeProfi
       <motion.div variants={containerVariants} initial="hidden" animate="visible" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '2rem', overflowY: 'auto' }}>
 
         {/* Top Metric Strip */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '1.5rem' }}>
+        <div className="kpi-grid-5">
           {[
             { label: 'LINE EFFICIENCY', val: `${optimization?.efficiency || '0.00'}%`, icon: Activity, color: isLowEfficiency ? 'var(--accent-danger)' : 'var(--accent-primary)', hint: 'Overall line balancing effectiveness' },
             { label: 'WORK STATIONS', val: optimization?.stations?.length || 0, sub: `/ ${nMin} Target`, icon: Info, color: '#0891b2', hint: 'Actual vs Theoretical minimum stations' },
@@ -163,7 +163,7 @@ const Dashboard = ({ tasks, config, setConfig, onNavigate, profiles, activeProfi
         </div>
 
         {/* Main Center Sections */}
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '2rem' }}>
+        <div className="grid-2fr-1fr">
 
           {/* Performance Control Panel */}
           <motion.div variants={itemVariants} className="glow-card" style={{ display: 'flex', flexDirection: 'column' }}>
@@ -177,7 +177,7 @@ const Dashboard = ({ tasks, config, setConfig, onNavigate, profiles, activeProfi
               </button>
             </div>
 
-            <div style={{ padding: '2rem', display: 'flex', gap: '3rem', alignItems: 'center' }}>
+            <div className="gauge-panel">
               {/* Industrial Gauge */}
               <div style={{ position: 'relative', width: '200px', height: '200px' }}>
                 <svg width="200" height="200" viewBox="0 0 200 200">
@@ -320,7 +320,7 @@ const Dashboard = ({ tasks, config, setConfig, onNavigate, profiles, activeProfi
                   </div>
 
                   {activeTab === 'variables' && (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
+                    <div className="variables-grid">
                       {variables.map(v => (
                         <div key={v.key} style={{ background: 'var(--bg-main)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -359,7 +359,7 @@ const Dashboard = ({ tasks, config, setConfig, onNavigate, profiles, activeProfi
                   )}
 
                   {activeTab === 'formulas' && (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
+                    <div className="formulas-grid">
                       {Object.entries(formulas).map(([key, formula]) => (
                         <div key={key} style={{ background: 'var(--bg-main)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

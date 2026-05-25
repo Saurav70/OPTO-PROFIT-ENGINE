@@ -21,6 +21,11 @@ backend/**/*.pyc
 .vscode/*
 !.vscode/extensions.json
 .idea
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
 .DS_Store
 *.suo
 *.ntvs*
@@ -28,4 +33,5 @@ backend/**/*.pyc
 *.sln
 *.sw?
 .env
+.env.*
 .aider*

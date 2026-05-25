@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Activity,
   Box,
@@ -10,8 +10,14 @@ import {
   Square,
   Workflow,
   Grid,
+  X,
+  Clock,
+  AlertTriangle,
+  Plus,
+  Minus,
+  RefreshCw,
 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { calculateTaktTime, runOptimization } from '../utils/optimizer';
 import EmptyState from './EmptyState';
 
@@ -128,11 +134,61 @@ const FloorLayout = ({ tasks = [], config, onNavigate }) => {
   });
   const [draggingStationIdx, setDraggingStationIdx] = useState(-1);
 
+  // High-fidelity spatial states
+  const [zoom, setZoom] = useState(1.0);
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+  const [isPerformanceMode, setIsPerformanceMode] = useState(true);
+
+  const canvasWrapperRef = useRef(null);
+
   useEffect(() => {
     const handleResize = () => setViewportWidth(window.innerWidth);
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  // Native non-passive wheel event listener to handle smooth zooming without browser scroll blocking
+  useEffect(() => {
+    const wrapper = canvasWrapperRef.current;
+    if (!wrapper) return;
+
+    const handleWheel = (e) => {
+      e.preventDefault();
+      const zoomFactor = 0.05;
+      const nextZoom = e.deltaY < 0 ? zoom + zoomFactor : zoom - zoomFactor;
+      setZoom(clamp(nextZoom, 0.5, 2.0));
+    };
+
+    wrapper.addEventListener('wheel', handleWheel, { passive: false });
+    return () => {
+      wrapper.removeEventListener('wheel', handleWheel);
+    };
+  }, [zoom]);
+
+  // Grid background mouse drag handlers for canvas panning
+  const handleGridMouseDown = (e) => {
+    // Only drag with left-click
+    if (e.button !== 0) return;
+    setIsPanning(true);
+    setPanStart({
+      x: e.clientX - panOffset.x,
+      y: e.clientY - panOffset.y,
+    });
+  };
+
+  const handleGridMouseMove = (e) => {
+    if (!isPanning) return;
+    setPanOffset({
+      x: e.clientX - panStart.x,
+      y: e.clientY - panStart.y,
+    });
+  };
+
+  const handleGridMouseUp = () => {
+    setIsPanning(false);
+  };
 
   const isStacked = viewportWidth < 1180;
   const safeSelectedStationIdx =
@@ -426,7 +482,7 @@ const FloorLayout = ({ tasks = [], config, onNavigate }) => {
   };
 
   const handleDragEnd = (idx, info) => {
-    applyStationOffsetDelta(idx, info.offset.x, info.offset.y);
+    applyStationOffsetDelta(idx, info.offset.x / zoom, info.offset.y / zoom);
   };
 
   return (
@@ -542,6 +598,31 @@ const FloorLayout = ({ tasks = [], config, onNavigate }) => {
                   />
                 </label>
 
+                <label
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    fontSize: '0.68rem',
+                    fontWeight: 900,
+                    color: 'var(--text-sub)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <div>
+                    <span>LOW-GPU MODE</span>
+                    <div style={{ fontSize: '0.55rem', fontWeight: 800, color: 'var(--accent-warning)', marginTop: '2px', textTransform: 'none', letterSpacing: '0.5px' }}>
+                      Disables animation loops & tokens
+                    </div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={isPerformanceMode}
+                    onChange={(event) => setIsPerformanceMode(event.target.checked)}
+                    style={{ accentColor: 'var(--accent-primary)', width: '15px', height: '15px' }}
+                  />
+                </label>
+
                 <div
                   style={{
                     padding: '0.75rem',
@@ -648,22 +729,33 @@ const FloorLayout = ({ tasks = [], config, onNavigate }) => {
             display: 'flex',
             flexDirection: 'column',
             background: 'var(--bg-main)',
+            position: 'relative',
           }}
         >
           <div
+            ref={canvasWrapperRef}
+            onMouseDown={handleGridMouseDown}
+            onMouseMove={handleGridMouseMove}
+            onMouseUp={handleGridMouseUp}
+            onMouseLeave={handleGridMouseUp}
             style={{
               flex: 1,
               minHeight: 0,
-              overflow: 'auto',
+              overflow: 'hidden',
               padding: '1rem',
+              position: 'relative',
               background:
                 'radial-gradient(circle at top left, rgba(13, 148, 136, 0.12), transparent 30%), var(--bg-main)',
+              cursor: isPanning ? 'grabbing' : 'grab',
             }}
           >
+            {/* Zoom / Pan Workspace Grid Canvas */}
             <div
               style={{
-                position: 'relative',
-                minWidth: canvasMetrics.width,
+                position: 'absolute',
+                left: '1rem',
+                top: '1rem',
+                width: canvasMetrics.width,
                 height: canvasMetrics.height,
                 borderRadius: '20px',
                 border: '1px solid var(--border-color)',
@@ -672,6 +764,9 @@ const FloorLayout = ({ tasks = [], config, onNavigate }) => {
                 backgroundImage:
                   'linear-gradient(rgba(100, 116, 139, 0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(100, 116, 139, 0.08) 1px, transparent 1px)',
                 backgroundSize: `${gridSize}px ${gridSize}px`,
+                transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`,
+                transformOrigin: 'top left',
+                transition: isPanning ? 'none' : 'transform 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
               }}
             >
               <div
@@ -713,8 +808,8 @@ const FloorLayout = ({ tasks = [], config, onNavigate }) => {
                           strokeWidth={isActiveTransfer ? 4 : 3}
                           strokeDasharray={isActiveTransfer ? '8 12' : '5 18'}
                           fill="none"
-                          animate={{ strokeDashoffset: [26, 0] }}
-                          transition={{ repeat: Infinity, ease: 'linear', duration: isActiveTransfer ? 0.7 : 1.6 }}
+                          animate={isPerformanceMode ? {} : { strokeDashoffset: [26, 0] }}
+                          transition={isPerformanceMode ? {} : { repeat: Infinity, ease: 'linear', duration: isActiveTransfer ? 0.7 : 1.6 }}
                         />
                       </g>
                     );
@@ -722,7 +817,8 @@ const FloorLayout = ({ tasks = [], config, onNavigate }) => {
                 </svg>
               )}
 
-              {displaySimulationState.unitPosition && (
+              {/* Simulation material item - hidden in Low-GPU Performance Mode */}
+              {!isPerformanceMode && displaySimulationState.unitPosition && (
                 <motion.div
                   animate={{
                     left: displaySimulationState.unitPosition.x - 19,
@@ -778,6 +874,7 @@ const FloorLayout = ({ tasks = [], config, onNavigate }) => {
                     drag={!isSimulating}
                     dragMomentum={false}
                     dragElastic={snapToGrid ? 0.04 : 0.1}
+                    onPointerDown={(e) => e.stopPropagation()} // Stop propagation to prevent drag pan conflicts
                     onDragStart={() => {
                       setDraggingStationIdx(station.idx);
                       setSelectedStationIdx(station.idx);
@@ -790,7 +887,10 @@ const FloorLayout = ({ tasks = [], config, onNavigate }) => {
                       scale: 1.03,
                       boxShadow: '0 24px 45px rgba(13, 148, 136, 0.28)',
                     }}
-                    onClick={() => setSelectedStationIdx(station.idx)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedStationIdx(station.idx);
+                    }}
                     animate={{
                       left: station.renderX,
                       top: station.renderY,
@@ -937,6 +1037,299 @@ const FloorLayout = ({ tasks = [], config, onNavigate }) => {
                 );
               })}
             </div>
+
+            {/* Floating Zoom & Pan HUD Controls */}
+            <div
+              style={{
+                position: 'absolute',
+                bottom: '1.25rem',
+                right: '1.25rem',
+                display: 'flex',
+                gap: '0.45rem',
+                background: 'rgba(15, 23, 42, 0.82)',
+                backdropFilter: 'blur(16px)',
+                border: '1px solid var(--border-color)',
+                borderRadius: 'var(--radius-md)',
+                padding: '0.45rem',
+                zIndex: 100,
+                boxShadow: '0 8px 30px rgba(0,0,0,0.3)',
+              }}
+            >
+              <button
+                onClick={(e) => { e.stopPropagation(); setZoom((z) => clamp(z + 0.1, 0.5, 2.0)); }}
+                title="Zoom In"
+                style={{
+                  background: 'var(--bg-secondary)',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--text-white)',
+                  width: '28px',
+                  height: '28px',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Plus size={14} />
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); setZoom((z) => clamp(z - 0.1, 0.5, 2.0)); }}
+                title="Zoom Out"
+                style={{
+                  background: 'var(--bg-secondary)',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--text-white)',
+                  width: '28px',
+                  height: '28px',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Minus size={14} />
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); setZoom(1.0); setPanOffset({ x: 0, y: 0 }); }}
+                title="Reset Workspace (1:1)"
+                style={{
+                  background: 'var(--bg-secondary)',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--text-white)',
+                  height: '28px',
+                  padding: '0 0.6rem',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '0.62rem',
+                  fontWeight: 900,
+                  gap: '5px',
+                }}
+              >
+                <RefreshCw size={11} />
+                {(zoom * 100).toFixed(0)}%
+              </button>
+            </div>
+
+            {/* Slide-out Detailed Task-List & Gantt Drawer */}
+            <AnimatePresence>
+              {selectedStationIdx !== -1 && canvasMetrics.renderStations[safeSelectedStationIdx] && (() => {
+                const station = canvasMetrics.renderStations[safeSelectedStationIdx];
+                return (
+                  <motion.div
+                    initial={{ x: 340, opacity: 0 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    exit={{ x: 340, opacity: 0 }}
+                    transition={{ type: 'spring', stiffness: 300, damping: 28 }}
+                    style={{
+                      position: 'absolute',
+                      right: '1rem',
+                      top: '1rem',
+                      bottom: '1rem',
+                      width: '320px',
+                      background: 'rgba(15, 23, 42, 0.85)',
+                      backdropFilter: 'blur(16px)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: 'var(--radius-lg)',
+                      zIndex: 150,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      padding: '1.25rem',
+                      overflowY: 'auto',
+                      boxShadow: '0 20px 50px rgba(0, 0, 0, 0.4)',
+                    }}
+                  >
+                    {/* Header */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+                      <div>
+                        <span style={{ fontSize: '0.58rem', fontWeight: 900, color: 'var(--accent-primary)', letterSpacing: '1px' }}>
+                          STATION TELEMETRY
+                        </span>
+                        <h3 style={{ margin: '0.2rem 0 0', fontSize: '1.05rem', fontWeight: 900, color: 'var(--text-white)', letterSpacing: '0.5px' }}>
+                          STATION {station.idx + 1}
+                        </h3>
+                        <span style={{ fontSize: '0.72rem', color: 'var(--text-sub)' }}>{station.role}</span>
+                      </div>
+                      <button
+                        onClick={() => setSelectedStationIdx(-1)}
+                        style={{
+                          background: 'var(--bg-secondary)',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: 'var(--radius-sm)',
+                          padding: '0.35rem',
+                          color: 'var(--text-white)',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <X size={15} />
+                      </button>
+                    </div>
+
+                    {/* Stats overview cards */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1.25rem' }}>
+                      <div style={{ background: 'var(--bg-secondary)', padding: '0.65rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.6rem', fontWeight: 900, color: 'var(--text-sub)' }}>
+                          <Gauge size={12} />
+                          UTILIZATION
+                        </div>
+                        <div style={{ marginTop: '0.25rem', fontSize: '1.1rem', fontWeight: 900, color: station.utilization > 95 ? 'var(--accent-warning)' : 'var(--accent-primary)' }}>
+                          {station.utilization.toFixed(1)}%
+                        </div>
+                      </div>
+                      <div style={{ background: 'var(--bg-secondary)', padding: '0.65rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.6rem', fontWeight: 900, color: 'var(--text-sub)' }}>
+                          <Clock size={12} />
+                          CYCLE TIME
+                        </div>
+                        <div style={{ marginTop: '0.25rem', fontSize: '1.1rem', fontWeight: 900, color: 'var(--text-white)' }}>
+                          {station.time.toFixed(2)}m
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Gantt Overlay */}
+                    <div style={{ marginBottom: '1.5rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.45rem' }}>
+                        <span style={{ fontSize: '0.65rem', fontWeight: 900, color: 'var(--text-sub)' }}>CYCLE TIME GANTT VS TAKT TIME</span>
+                        <span style={{ fontSize: '0.65rem', fontWeight: 900, color: 'var(--text-white)' }}>
+                          Takt: {taktTime.toFixed(1)}m
+                        </span>
+                      </div>
+                      <div
+                        style={{
+                          height: '24px',
+                          borderRadius: 'var(--radius-sm)',
+                          background: 'var(--bg-tertiary)',
+                          border: '1px solid var(--border-color)',
+                          overflow: 'hidden',
+                          position: 'relative',
+                          display: 'flex',
+                        }}
+                      >
+                        {/* Render sequential task blocks inside the bar */}
+                        {station.tasks.map((task, i) => {
+                          const widthPercent = (task.time / Math.max(taktTime, station.time)) * 100;
+                          const colors = [
+                            'rgba(13, 148, 136, 0.45)', // teal
+                            'rgba(168, 85, 247, 0.45)', // purple
+                            'rgba(245, 158, 11, 0.45)', // amber
+                            'rgba(6, 182, 212, 0.45)',  // cyan
+                            'rgba(239, 68, 68, 0.45)',  // red
+                          ];
+                          const borderColors = [
+                            'var(--accent-primary)',
+                            '#a855f7',
+                            'var(--accent-warning)',
+                            '#06b6d4',
+                            'var(--accent-danger)',
+                          ];
+                          const bg = colors[i % colors.length];
+                          const border = borderColors[i % borderColors.length];
+
+                          return (
+                            <div
+                              key={task.id}
+                              title={`${task.name}: ${task.time.toFixed(1)}m`}
+                              style={{
+                                width: `${widthPercent}%`,
+                                height: '100%',
+                                background: bg,
+                                borderRight: '1px solid rgba(255, 255, 255, 0.1)',
+                                borderBottom: `2px solid ${border}`,
+                                position: 'relative',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '0.52rem',
+                                fontWeight: 900,
+                                color: 'var(--text-white)',
+                              }}
+                            >
+                              {task.id}
+                            </div>
+                          );
+                        })}
+
+                        {/* Takt Time Limit Line */}
+                        {taktTime > 0 && taktTime >= station.time && (
+                          <div
+                            style={{
+                              position: 'absolute',
+                              left: `${(taktTime / Math.max(taktTime, station.time)) * 100}%`,
+                              top: 0,
+                              bottom: 0,
+                              width: '2px',
+                              background: 'rgba(239, 68, 68, 0.7)',
+                              borderLeft: '1px dashed #ef4444',
+                              zIndex: 10,
+                              pointerEvents: 'none',
+                            }}
+                          />
+                        )}
+                      </div>
+                      {station.time > taktTime && (
+                        <div style={{ marginTop: '0.45rem', display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--accent-danger)', fontSize: '0.64rem', fontWeight: 800 }}>
+                          <AlertTriangle size={12} />
+                          <span>Bottleneck: Load exceeds Takt Time!</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Detailed Tasks Roster */}
+                    <div>
+                      <div style={{ fontSize: '0.68rem', fontWeight: 900, color: 'var(--text-sub)', letterSpacing: '0.8px', marginBottom: '0.75rem' }}>
+                        ASSIGNED PROCESS TASKS ({station.tasks.length})
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                        {station.tasks.map((task) => (
+                          <div
+                            key={task.id}
+                            style={{
+                              background: 'var(--bg-secondary)',
+                              border: '1px solid var(--border-color)',
+                              borderRadius: 'var(--radius-md)',
+                              padding: '0.8rem',
+                            }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', marginBottom: '0.4rem' }}>
+                              <span style={{ fontSize: '0.72rem', fontWeight: 900, color: 'var(--text-white)' }}>
+                                <span style={{ color: 'var(--accent-primary)', marginRight: '6px' }}>{task.id}</span>
+                                {task.name}
+                              </span>
+                              <span style={{ fontSize: '0.65rem', fontWeight: 900, color: 'var(--text-sub)' }}>
+                                {task.time.toFixed(1)}m
+                              </span>
+                            </div>
+                            <p style={{ margin: 0, fontSize: '0.64rem', color: 'var(--text-main)', lineHeight: 1.45, marginBottom: '0.4rem' }}>
+                              {task.desc || 'No process description provided.'}
+                            </p>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.45rem', fontSize: '0.52rem', fontWeight: 900 }}>
+                              {task.predecessors && task.predecessors.length > 0 && task.predecessors[0] !== 'None' && (
+                                <span style={{ background: 'var(--card-bg)', border: '1px solid var(--border-color)', padding: '0.2rem 0.4rem', borderRadius: '4px', color: 'var(--text-sub)' }}>
+                                  PREREQ: {task.predecessors.join(', ')}
+                                </span>
+                              )}
+                              {task.zoning && (
+                                <span style={{ background: 'rgba(168, 85, 247, 0.1)', border: '1px solid rgba(168, 85, 247, 0.3)', padding: '0.2rem 0.4rem', borderRadius: '4px', color: '#a855f7' }}>
+                                  ZONE: {task.zoning}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              })()}
+            </AnimatePresence>
           </div>
 
 
