@@ -18,7 +18,6 @@ jobs:
       (github.event.workflow_run.conclusion == 'success' && (github.event.workflow_run.head_branch == 'main' || github.event.workflow_run.head_branch == 'master'))
     runs-on: ubuntu-latest
     env:
-      DEPLOY_WEBHOOK_URL: ${{ secrets.DEPLOY_WEBHOOK_URL }}
       IMAGE_BACKEND: ""
       IMAGE_FRONTEND: ""
     steps:
@@ -86,5 +85,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Trigger deploy webhook (optional)
-        if: env.DEPLOY_WEBHOOK_URL != ''
+        if: ${{ secrets.DEPLOY_WEBHOOK_URL != '' }}
+        env:
+          DEPLOY_WEBHOOK_URL: ${{ secrets.DEPLOY_WEBHOOK_URL }}
         run: curl -fsS -X POST "$DEPLOY_WEBHOOK_URL"
