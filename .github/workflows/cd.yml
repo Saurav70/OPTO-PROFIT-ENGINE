@@ -87,4 +87,4 @@ jobs:
 
       - name: Trigger deploy webhook (optional)
         if: env.DEPLOY_WEBHOOK_URL != ''
-        run: curl -fsS -X POST "${{ env.DEPLOY_WEBHOOK_URL }}"
+        run: curl -fsS -X POST "$DEPLOY_WEBHOOK_URL"
