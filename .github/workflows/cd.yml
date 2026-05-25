@@ -85,7 +85,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Trigger deploy webhook (optional)
-        if: ${{ secrets.DEPLOY_WEBHOOK_URL != '' }}
         env:
           DEPLOY_WEBHOOK_URL: ${{ secrets.DEPLOY_WEBHOOK_URL }}
+        if: env.DEPLOY_WEBHOOK_URL != ''
         run: curl -fsS -X POST "$DEPLOY_WEBHOOK_URL"
