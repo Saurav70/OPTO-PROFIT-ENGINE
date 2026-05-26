@@ -103,14 +103,19 @@ const getStationRole = (idx, total) => {
   return `Assembly cell ${idx + 1}`;
 };
 
-const FloorLayout = ({ tasks = [], config, onNavigate }) => {
+const FloorLayout = ({ tasks = [], config, onNavigate, optimization: sharedOptimization }) => {
   const taktTime = useMemo(
     () => calculateTaktTime(config || {}),
     [config]
   );
-  const optimization = useMemo(() => runOptimization(tasks || [], taktTime, 'LTF', config || {}), [tasks, taktTime, config]);
+  // P2-5: Use shared optimization from App if available, otherwise compute locally
+  const localOptimization = useMemo(
+    () => runOptimization(tasks || [], taktTime, 'LTF', config || {}),
+    [tasks, taktTime, config]
+  );
+  const optimization = sharedOptimization || localOptimization;
 
-  const [layoutType] = useState('u-shape');
+  const [layoutType, setLayoutType] = useState('u-shape');
   const [showArrows, setShowArrows] = useState(true);
   const [isSimulating, setIsSimulating] = useState(false);
   const [selectedStationIdx, setSelectedStationIdx] = useState(0);
@@ -149,6 +154,10 @@ const FloorLayout = ({ tasks = [], config, onNavigate }) => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // P1-2: Use a ref for zoom so the wheel handler never causes a re-register
+  const zoomRef = useRef(zoom);
+  useEffect(() => { zoomRef.current = zoom; }, [zoom]);
+
   // Native non-passive wheel event listener to handle smooth zooming without browser scroll blocking
   useEffect(() => {
     const wrapper = canvasWrapperRef.current;
@@ -157,7 +166,7 @@ const FloorLayout = ({ tasks = [], config, onNavigate }) => {
     const handleWheel = (e) => {
       e.preventDefault();
       const zoomFactor = 0.05;
-      const nextZoom = e.deltaY < 0 ? zoom + zoomFactor : zoom - zoomFactor;
+      const nextZoom = e.deltaY < 0 ? zoomRef.current + zoomFactor : zoomRef.current - zoomFactor;
       setZoom(clamp(nextZoom, 0.5, 2.0));
     };
 
@@ -165,7 +174,7 @@ const FloorLayout = ({ tasks = [], config, onNavigate }) => {
     return () => {
       wrapper.removeEventListener('wheel', handleWheel);
     };
-  }, [zoom]);
+  }, []); // P1-2: No zoom dependency — uses zoomRef instead
 
   // Grid background mouse drag handlers for canvas panning
   const handleGridMouseDown = (e) => {
@@ -577,6 +586,30 @@ const FloorLayout = ({ tasks = [], config, onNavigate }) => {
                     onChange={(event) => setSimulationSpeed(Number(event.target.value))}
                     style={{ width: '100%', accentColor: 'var(--accent-primary)' }}
                   />
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+                  <span style={{ fontSize: '0.68rem', fontWeight: 900, color: 'var(--text-sub)' }}>LAYOUT GEOMETRY</span>
+                  <select
+                    value={layoutType}
+                    onChange={(event) => setLayoutType(event.target.value)}
+                    style={{
+                      width: '100%',
+                      background: 'var(--bg-secondary)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '0.65rem',
+                      fontSize: '0.72rem',
+                      fontWeight: 800,
+                      color: 'var(--text-white)',
+                      outline: 'none',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <option value="u-shape">U-Shape Layout</option>
+                    <option value="straight">Straight Line Layout</option>
+                    <option value="scatter">Scattered Cluster Layout</option>
+                  </select>
                 </div>
 
                 <label

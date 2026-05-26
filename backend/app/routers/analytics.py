@@ -114,25 +114,24 @@ def evaluate_formula(formula: str | None, context: Dict[str, float]) -> float:
     except Exception:
         return 0
 
-# ── Auth dependency (duplicated to avoid circular import from main) ──
+# ── Auth dependency (uses shared auth module — P0-5 fix) ──
 async def _require_user_for_analytics(authorization: str | None = Header(default=None)) -> dict:
     """Lightweight auth guard for the analytics router."""
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing or invalid authorization header")
-    # Import at call time to avoid circular dependency
-    from ..main import _hash_token, _utc_now, app as main_app
-    import hashlib
+    from ..auth import hash_token, utc_now
+    from ..main import app as main_app
     token = authorization.split(" ", 1)[1].strip()
     if not token:
         raise HTTPException(status_code=401, detail="Invalid token")
-    token_hash = _hash_token(token)
+    token_hash = hash_token(token)
     session = await main_app.database["sessions"].find_one({"token_hash": token_hash})
     if not session:
         raise HTTPException(status_code=401, detail="Session not found")
     expires_at = session.get("expires_at")
     if expires_at and expires_at.tzinfo is None:
         expires_at = expires_at.replace(tzinfo=timezone.utc)
-    if not expires_at or expires_at < _utc_now():
+    if not expires_at or expires_at < utc_now():
         raise HTTPException(status_code=401, detail="Session expired")
     return session
 

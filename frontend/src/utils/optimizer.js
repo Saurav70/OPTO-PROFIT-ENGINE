@@ -283,12 +283,15 @@ export const calculateCriticalPath = (tasks, stations) => {
     .filter(t => Math.abs((LS[t.id] || 0) - (ES[t.id] || 0)) < 0.001)
     .map(t => t.id);
 
+  // P2-8: Use Set for O(1) lookups in station scan
+  const criticalSet = new Set(criticalTaskIds);
+
   // --- Find which station contains the most critical tasks ---
   let criticalStation = 1;
   if (stations && stations.length > 0) {
     let maxCritical = -1;
     stations.forEach((st, idx) => {
-      const count = st.tasks.filter(t => criticalTaskIds.includes(t.id)).length;
+      const count = st.tasks.filter(t => criticalSet.has(t.id)).length;
       if (count > maxCritical) {
         maxCritical = count;
         criticalStation = idx + 1;

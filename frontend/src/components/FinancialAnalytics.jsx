@@ -10,7 +10,8 @@ const FinancialAnalytics = ({ tasks, config, optimization }) => {
   const [serverRoi, setServerRoi] = useState(null);
 
   const localRoi = calculateROI(tasks, config, optimization || {});
-  const roi = serverRoi || localRoi;
+  // P2-9: liveChart toggle controls data source — server (live) vs local (static)
+  const roi = (liveChart && serverRoi) ? serverRoi : localRoi;
   
   const variables = config?.variables || [];
   const workDays = getVariableValue(variables, 'work_days', 25);

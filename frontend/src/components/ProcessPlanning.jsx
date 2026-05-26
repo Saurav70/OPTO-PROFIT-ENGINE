@@ -124,7 +124,16 @@ const ProcessPlanning = ({ tasks, setTasks, onSaveTasks, config, optimization })
   const formulaSteps = useMemo(() => generateFormulaTrace(tasks, config, liveOptimization), [tasks, config, liveOptimization]);
 
   const addTask = () => {
-    const newId = String.fromCharCode(65 + tasks.length);
+    // P1-5: Robust ID generation — A-Z then AA, AB, ... AZ, BA, BB, ...
+    const idx = tasks.length;
+    let newId;
+    if (idx < 26) {
+      newId = String.fromCharCode(65 + idx);
+    } else {
+      const first = String.fromCharCode(65 + Math.floor((idx - 26) / 26));
+      const second = String.fromCharCode(65 + ((idx - 26) % 26));
+      newId = `${first}${second}`;
+    }
     const baseAttrs = {};
     customColumns.forEach(c => { baseAttrs[c.key] = c.type === 'number' ? 0 : ''; });
     setTasks([...tasks, { id: newId, name: 'New Task', time: 5, predecessors: [], zoning: 'None', custom_attributes: baseAttrs }]);

@@ -68,22 +68,23 @@ class ErrorBoundary extends React.Component {
             </p>
           </div>
 
-          {this.state.error && (
-            <pre style={{
-              fontSize: '0.7rem',
-              color: 'var(--accent-danger, #ef4444)',
-              background: 'rgba(239, 68, 68, 0.05)',
-              padding: '0.75rem 1rem',
-              borderRadius: '8px',
-              border: '1px solid rgba(239, 68, 68, 0.15)',
-              maxWidth: '500px',
-              overflow: 'auto',
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word',
-              margin: 0,
-            }}>
-              {this.state.error.toString()}
-            </pre>
+          {/* P2-4: Only show raw error details in development mode */}
+          {import.meta.env.DEV && this.state.error && (
+            <div
+              style={{
+                background: 'var(--bg-tertiary, #1e293b)',
+                border: '1px solid var(--border-color, #334155)',
+                borderRadius: '8px',
+                padding: '1rem',
+                marginTop: '1.2rem',
+                maxHeight: '160px',
+                overflowY: 'auto',
+              }}
+            >
+              <pre style={{ margin: 0, fontSize: '0.72rem', color: 'var(--accent-danger, #ef4444)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'monospace' }}>
+                {this.state.error.toString()}
+              </pre>
+            </div>
           )}
 
           <button

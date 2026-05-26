@@ -5,6 +5,8 @@ import { api } from './services/api';
 import Sidebar from './components/Sidebar';
 import SettingsLayout from './components/SettingsLayout';
 import ErrorBoundary from './components/ErrorBoundary';
+import SplashScreen from './components/SplashScreen';
+import ToastContainer, { useToast } from './components/Toast';
 
 // Lazy-loaded components for performance
 const Welcome = lazy(() => import('./components/Welcome'));
@@ -46,10 +48,12 @@ const STORAGE_KEYS = {
 };
 
 const App = () => {
-  // Initial State Hydration
+  // Initial State Hydration (P0-2: hydrate from localStorage for offline resilience)
   const savedDarkMode = localStorage.getItem(STORAGE_KEYS.DARK_MODE);
   const savedProfiles = localStorage.getItem(STORAGE_KEYS.PROFILES);
   const savedActiveProfileId = localStorage.getItem(STORAGE_KEYS.ACTIVE_PROFILE);
+  const savedTasks = localStorage.getItem(STORAGE_KEYS.TASKS);
+  const savedConfig = localStorage.getItem(STORAGE_KEYS.CONFIG);
 
   const [currentScreen, setCurrentScreen] = useState('welcome');
   const [authChecked, setAuthChecked] = useState(false);
@@ -62,11 +66,14 @@ const App = () => {
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
-  const [tasks, setTasks] = useState([]);
-  const [config, setConfig] = useState({});
+  const [tasks, setTasks] = useState(() => { try { return savedTasks ? JSON.parse(savedTasks) : []; } catch { return []; } });
+  const [config, setConfig] = useState(() => { try { return savedConfig ? JSON.parse(savedConfig) : {}; } catch { return {}; } });
   const [dataLoaded, setDataLoaded] = useState(false);
   const lastSavedTasksJsonRef = useRef('');
   const autosaveTimerRef = useRef(null);
+
+  // P0-1: Toast notifications for autosave and other async feedback
+  const [toasts, addToast, dismissToast] = useToast();
 
   useEffect(() => {
     const verifySession = async () => {
@@ -153,6 +160,10 @@ const App = () => {
       setTwoFactorRequired(true);
       // Keep isAuthenticated as false until 2FA is verified
     } else {
+      // P2-2: Caller now explicitly stores the main auth token
+      if (response?.access_token) {
+        api.auth.setToken(response.access_token);
+      }
       setIsAuthenticated(true);
       setCurrentScreen('dashboard');
       setMaxStepReached(0);
@@ -160,7 +171,11 @@ const App = () => {
     }
   }, []);
 
-  const handle2faSuccess = useCallback(() => {
+  const handle2faSuccess = useCallback((response) => {
+    // P2-2: Caller stores token after successful 2FA verification
+    if (response?.access_token) {
+      api.auth.setToken(response.access_token);
+    }
     setIsAuthenticated(true);
     setCurrentScreen('dashboard');
     setMaxStepReached(0);
@@ -215,13 +230,15 @@ const App = () => {
 
     if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
     autosaveTimerRef.current = setTimeout(() => {
-      handleSaveTasks(tasks).catch(() => { });
+      handleSaveTasks(tasks).catch(() => {
+        addToast({ message: 'Autosave failed — your changes are saved locally but not synced to the server.', variant: 'warning', duration: 8000 });
+      });
     }, 600);
 
     return () => {
       if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
     };
-  }, [tasks, isAuthenticated, dataLoaded, handleSaveTasks]);
+  }, [tasks, isAuthenticated, dataLoaded, handleSaveTasks, addToast]);
 
   const loadProfile = useCallback(async (id) => {
     const profile = profiles.find(p => p.id === id);
@@ -311,7 +328,7 @@ const App = () => {
   }, [handleLogout]);
 
   if (!authChecked) {
-    return <div style={{ padding: '2rem' }}>Checking session...</div>;
+    return <SplashScreen />;
   }
 
   if (twoFactorRequired) {
@@ -348,6 +365,7 @@ const App = () => {
 
   return (
     <div className="app-shell" style={{ display: 'flex', minHeight: '100vh', backgroundColor: 'var(--bg-main)', color: 'var(--text-main)', transition: 'all 0.3s ease' }}>
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
       <button
         type="button"
         className="mobile-nav-toggle no-print"
@@ -402,7 +420,7 @@ const App = () => {
                   {currentScreen === 'network' && <PrecedenceNetwork tasks={tasks} onNavigate={navigateTo} />}
                   {currentScreen === 'conceptual' && <ConceptualLayout tasks={tasks} config={config} optimization={sharedOptimization} onNavigate={navigateTo} />}
                   {currentScreen === 'optimization' && <LineOptimization tasks={tasks} config={config} setConfig={handleSaveConfig} optimization={sharedOptimization} />}
-                  {currentScreen === 'floor' && <FloorLayout tasks={tasks} config={config} onNavigate={navigateTo} />}
+                  {currentScreen === 'floor' && <FloorLayout tasks={tasks} config={config} onNavigate={navigateTo} optimization={sharedOptimization} />}
                   {currentScreen === 'financials' && <FinancialAnalytics tasks={tasks} config={config} optimization={sharedOptimization} />}
                 </Suspense>
                 </ErrorBoundary>

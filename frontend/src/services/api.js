@@ -142,20 +142,17 @@ export async function apiRequest(endpoint, options = {}) {
       });
     }
 
-    // Handle 2FA specific response
+    // Handle 2FA specific response — temp token is transport-level, handled here.
     if (data && data.two_factor_required) {
       localStorage.setItem(TEMP_2FA_TOKEN_KEY, data.access_token);
-      // Do not store in AUTH_TOKEN_KEY yet, let the frontend handle 2FA verification
       return { ...data, two_factor_required: true }; 
     } else if (endpoint.includes('/api/auth/2fa/verify')) {
-      // If it's a 2FA verification successful response, clear temp token and set main token
+      // P2-2: 2FA verify clears temp token; caller sets main token via api.auth.setToken()
       localStorage.removeItem(TEMP_2FA_TOKEN_KEY);
-      localStorage.setItem(AUTH_TOKEN_KEY, data.access_token);
-    } else if (data && data.access_token && !useTempToken) {
-      // For regular logins or successful 2FA flow, set the main auth token
-      localStorage.setItem(AUTH_TOKEN_KEY, data.access_token);
-      localStorage.removeItem(TEMP_2FA_TOKEN_KEY); // Ensure temp token is cleared if it exists
     }
+
+    // P2-2: Token storage for non-2FA auth flows is now handled by callers
+    // (App.jsx login/register handlers call api.auth.setToken(data.access_token))
 
     return data;
   } catch (error) {

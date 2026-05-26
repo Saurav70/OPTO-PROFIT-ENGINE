@@ -12,6 +12,11 @@ const Dashboard = ({ tasks, config, setConfig, onNavigate, profiles, activeProfi
   const [activeTab, setActiveTab] = useState('variables'); // 'variables' or 'formulas'
   const [zoneA, setZoneA] = useState('');
   const [zoneB, setZoneB] = useState('');
+  // P1-6: Inline state for adding formulas and zones (replaces prompt/alert)
+  const [newFormulaName, setNewFormulaName] = useState('');
+  const [showNewFormulaInput, setShowNewFormulaInput] = useState(false);
+  const [newZoneName, setNewZoneName] = useState('');
+  const [showNewZoneInput, setShowNewZoneInput] = useState(false);
 
   const variables = config?.variables || [];
   const formulas = config?.formulas || {};
@@ -59,13 +64,16 @@ const Dashboard = ({ tasks, config, setConfig, onNavigate, profiles, activeProfi
   };
 
   const addFormula = () => {
-    const key = prompt('Enter a name for the new mathematical rule:');
-    if (key && !formulas[key]) {
-      setConfig({ ...config, formulas: { ...formulas, [key]: '0' } });
-      setEditingFormulaKey(key);
-    } else if (formulas[key]) {
-      alert('A rule with this name already exists.');
+    const key = newFormulaName.trim();
+    if (!key) return;
+    if (formulas[key]) {
+      setNewFormulaName('');
+      return;
     }
+    setConfig({ ...config, formulas: { ...formulas, [key]: '0' } });
+    setEditingFormulaKey(key);
+    setNewFormulaName('');
+    setShowNewFormulaInput(false);
   };
 
   const deleteFormula = (key) => {
@@ -75,9 +83,14 @@ const Dashboard = ({ tasks, config, setConfig, onNavigate, profiles, activeProfi
   };
 
   const addZone = () => {
-    const zone = prompt('Enter new zone name:')?.trim();
-    if (!zone || (config.custom_zones || []).includes(zone)) return;
+    const zone = newZoneName.trim();
+    if (!zone || (config.custom_zones || []).includes(zone)) {
+      setNewZoneName('');
+      return;
+    }
     setConfig({ ...config, custom_zones: [...(config.custom_zones || []), zone] });
+    setNewZoneName('');
+    setShowNewZoneInput(false);
   };
 
   const removeZone = (zone) => {
@@ -377,6 +390,25 @@ const Dashboard = ({ tasks, config, setConfig, onNavigate, profiles, activeProfi
                       <button onClick={addFormula} className="btn-outline" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '0.75rem', minHeight: '100px', borderRadius: '8px' }}>
                         <Plus size={14} /> ADD NEW RULE
                       </button>
+                      {showNewFormulaInput ? (
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          <input
+                            value={newFormulaName}
+                            onChange={e => setNewFormulaName(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && addFormula()}
+                            placeholder="Rule name..."
+                            className="industrial-input"
+                            style={{ flex: 1 }}
+                            autoFocus
+                          />
+                          <button onClick={addFormula} className="btn-primary" style={{ padding: '0.55rem 1rem', fontSize: '0.7rem' }}>CREATE</button>
+                          <button onClick={() => { setShowNewFormulaInput(false); setNewFormulaName(''); }} style={{ background: 'transparent', border: 'none', color: 'var(--text-sub)', cursor: 'pointer' }}><X size={14} /></button>
+                        </div>
+                      ) : (
+                        <button onClick={() => setShowNewFormulaInput(true)} className="btn-outline" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '0.75rem', minHeight: '60px', borderRadius: '8px' }}>
+                          <Plus size={14} /> ADD NEW RULE
+                        </button>
+                      )}
                     </div>
                   )}
 
@@ -391,12 +423,28 @@ const Dashboard = ({ tasks, config, setConfig, onNavigate, profiles, activeProfi
                               <X size={12} style={{ cursor: 'pointer' }} onClick={() => removeZone(zone)} />
                             </div>
                           ))}
-                          <button 
-                            onClick={addZone}
-                            style={{ background: 'var(--accent-primary)20', border: '1px dashed var(--accent-primary)', color: 'var(--accent-primary)', padding: '4px 12px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 700 }}
-                          >
-                            + ADD ZONE
-                          </button>
+                          {showNewZoneInput ? (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <input
+                                value={newZoneName}
+                                onChange={e => setNewZoneName(e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && addZone()}
+                                placeholder="Zone name..."
+                                className="industrial-input"
+                                style={{ width: '130px', padding: '4px 10px', fontSize: '0.72rem' }}
+                                autoFocus
+                              />
+                              <button onClick={addZone} className="btn-primary" style={{ padding: '4px 10px', fontSize: '0.65rem', borderRadius: '16px' }}>ADD</button>
+                              <button onClick={() => { setShowNewZoneInput(false); setNewZoneName(''); }} style={{ background: 'transparent', border: 'none', color: 'var(--text-sub)', cursor: 'pointer' }}><X size={12} /></button>
+                            </div>
+                          ) : (
+                            <button 
+                              onClick={() => setShowNewZoneInput(true)}
+                              style={{ background: 'var(--accent-primary)20', border: '1px dashed var(--accent-primary)', color: 'var(--accent-primary)', padding: '4px 12px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 700 }}
+                            >
+                              + ADD ZONE
+                            </button>
+                          )}
                         </div>
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) auto', gap: '0.75rem', alignItems: 'end' }}>

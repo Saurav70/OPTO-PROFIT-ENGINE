@@ -1,12 +1,19 @@
-import hashlib
-import hmac
 import logging
 import os
 import re
 import secrets
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import timezone
 from typing import List
+
+from .auth import (
+    utc_now as _utc_now,
+    hash_password as _hash_password,
+    verify_password as _verify_password,
+    hash_token as _hash_token,
+    create_session as _create_session_impl,
+    create_password_reset_token as _create_password_reset_token_impl,
+)
 
 # pyrefly: ignore [missing-import]
 import pyotp
@@ -71,7 +78,7 @@ DEFAULT_CONFIG = {
         {"key": "operator_cost_per_hour", "label": "Operator Cost / Hour", "value": 0, "unit": "₹", "category": "Financial"},
         {"key": "investment_cost", "label": "Investment Cost", "value": 0, "unit": "₹", "category": "Financial"},
         {"key": "target_cycle_time", "label": "Target Cycle Time", "value": 30, "unit": "min", "category": "Production"},
-        {"key": "currency_symbol", "label": "Currency Symbol", "value": 0, "unit": "₹", "category": "General"},
+        # Note: currency_symbol is a UI concern — stored as variable for dynamic access but value is unused in formulas.
     ],
     "formulas": {
         "TaktTime": "shift_time / demand",
@@ -157,60 +164,18 @@ app.add_middleware(
 app.include_router(analytics.router)
 app.include_router(healthcheck.router)
 
-def _utc_now() -> datetime:
-    return datetime.now(timezone.utc)
-
+# _utc_now, _hash_password, _verify_password, _hash_token are imported from .auth
 
 def _normalize_username(username: str) -> str:
     return username.strip().lower()
 
 
-def _hash_password(password: str, salt: bytes | None = None) -> str:
-    salt_bytes = salt or secrets.token_bytes(16)
-    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt_bytes, 200_000)
-    return f"{salt_bytes.hex()}${digest.hex()}"
-
-
-def _verify_password(password: str, stored_hash: str) -> bool:
-    try:
-        salt_hex, digest_hex = stored_hash.split("$", 1)
-    except ValueError:
-        return False
-    candidate = _hash_password(password, bytes.fromhex(salt_hex)).split("$", 1)[1]
-    return hmac.compare_digest(candidate, digest_hex)
-
-
-def _hash_token(token: str) -> str:
-    return hashlib.sha256(token.encode("utf-8")).hexdigest()
-
-
 async def _create_session(user_id: str) -> str:
-    token = secrets.token_urlsafe(48)
-    expires_at = _utc_now() + timedelta(hours=12)
-    await app.database["sessions"].insert_one(
-        {
-            "token_hash": _hash_token(token),
-            "user_id": user_id,
-            "expires_at": expires_at,
-            "created_at": _utc_now(),
-        }
-    )
-    return token
+    return await _create_session_impl(app.database, user_id)
 
 
 async def _create_password_reset_token(user_id: str) -> str:
-    token = secrets.token_urlsafe(48)
-    await app.database["password_reset_tokens"].delete_many({"user_id": user_id, "used_at": None})
-    await app.database["password_reset_tokens"].insert_one(
-        {
-            "token_hash": _hash_token(token),
-            "user_id": user_id,
-            "created_at": _utc_now(),
-            "expires_at": _utc_now() + timedelta(minutes=30),
-            "used_at": None,
-        }
-    )
-    return token
+    return await _create_password_reset_token_impl(app.database, user_id)
 
 
 # Startup/shutdown handled by the `lifespan` context manager above.
@@ -305,10 +270,8 @@ async def login(request: Request, payload: LoginRequest):
 
 @app.get("/api/auth/me", response_model=AuthUserResponse)
 async def get_me(current_user: dict = Depends(require_user)):
-    user_doc = await app.database["users"].find_one({"_id": current_user["_id"]})
-    if not user_doc:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
-    user = User(**user_doc)
+    # P0-4: Use the user dict already fetched by require_user instead of a second DB round-trip
+    user = User(**current_user)
     return AuthUserResponse(
         id=user.id,
         username=user.username,
@@ -493,10 +456,14 @@ async def verify_2fa(request: Request, payload: TwoFactorVerifyRequest, current_
     if not totp.verify(payload.code):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid 2FA code.")
 
-    # 2FA successful, create a permanent session token
+    # P0-3: Invalidate the temporary 2FA session token BEFORE creating a permanent one.
+    # The temp token was extracted from the Authorization header by require_2fa_token.
+    temp_token_from_header = request.headers.get("authorization", "").split(" ", 1)[-1].strip()
+    if temp_token_from_header:
+        await app.database["sessions"].delete_one({"token_hash": _hash_token(temp_token_from_header)})
+
+    # 2FA successful — create a permanent session token
     token = await _create_session(user.id)
-    # Clear the temporary session token used for 2FA verification
-    # This might have been handled implicitly by _create_session or can be explicit if needed.
     return AuthTokenResponse(access_token=token)
 
 

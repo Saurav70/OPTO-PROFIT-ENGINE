@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { calculateTaktTime, runOptimization } from '../utils/optimizer';
 import { CheckCircle, AlertTriangle, XCircle, X, Zap, Sliders, Info, TrendingDown, Award, ShieldAlert } from 'lucide-react';
 import { getVariableValue } from '../utils/formulaEngine';
@@ -29,13 +29,18 @@ const LineOptimization = ({ tasks, config, setConfig, optimization: sharedOptimi
     return activeTarget !== null && !isNaN(activeTarget) ? activeTarget : globalTarget;
   });
 
-  const [prevTargetEfficiency, setPrevTargetEfficiency] = useState(config?.target_efficiency);
-  if (config?.target_efficiency !== prevTargetEfficiency) {
-    setPrevTargetEfficiency(config?.target_efficiency);
+  // P1-8: Sync target efficiency from config changes via useEffect (not during render)
+  useEffect(() => {
     const activeTarget = config?.target_efficiency !== undefined && config?.target_efficiency !== null ? Number(config.target_efficiency) : null;
     const globalTarget = typeof window !== 'undefined' && window.localStorage ? (Number(window.localStorage.getItem('opto_global_target_efficiency')) || 85) : 85;
-    setTargetEfficiencyInput(activeTarget !== null && !isNaN(activeTarget) ? activeTarget : globalTarget);
-  }
+    const targetVal = activeTarget !== null && !isNaN(activeTarget) ? activeTarget : globalTarget;
+    
+    // P1-8: Defer setState update to next tick to avoid synchronous cascading renders
+    const timer = setTimeout(() => {
+      setTargetEfficiencyInput(targetVal);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [config?.target_efficiency]);
 
   const globalDefaultEfficiency = useMemo(() => {
     return typeof window !== 'undefined' && window.localStorage ? (Number(window.localStorage.getItem('opto_global_target_efficiency')) || 85) : 85;
