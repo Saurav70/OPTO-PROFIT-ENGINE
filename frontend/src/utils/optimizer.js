@@ -21,7 +21,7 @@ const getTotalTaskTime = (tasks) => tasks.reduce((sum, task) => sum + getTaskTim
 export const calculateTaktTime = (config) => {
   const formulas = config?.formulas || {};
   const variables = config?.variables || [];
-  
+
   if (formulas.TaktTime) {
     const context = buildContext(variables);
     return evaluateFormula(formulas.TaktTime, context);
@@ -29,7 +29,7 @@ export const calculateTaktTime = (config) => {
 
   const availableTime = getVariableValue(variables, 'shift_time', 0);
   const demand = getVariableValue(variables, 'demand', 0);
-  
+
   if (demand <= 0) return 0;
   return availableTime / demand;
 };
@@ -195,14 +195,14 @@ export const runOptimization = (tasks, taktTime, heuristic = 'LTF', config = {})
   /* ─── Mathematical Performance Metrics (PDF Aligned) ─── */
   const totalTaskTime = getTotalTaskTime(tasks);
   const nActual = stations.length;
-  
+
   const efficiency = nActual > 0 ? (totalTaskTime / (nActual * taktTime)) * 100 : 0;
   const totalIdleTime = (nActual * taktTime) - totalTaskTime;
   const balanceDelay = 100 - efficiency;
 
   // Smoothness Index (SI) Calculation
   const actualCycleTime = stations.length > 0 ? Math.max(...stations.map(s => s.time)) : 0;
-  const smoothnessIndex = stations.length > 0 
+  const smoothnessIndex = stations.length > 0
     ? Math.sqrt(stations.reduce((sum, s) => sum + Math.pow(actualCycleTime - s.time, 2), 0))
     : 0;
 
