@@ -15,7 +15,6 @@ RUN adduser --disabled-password --gecos "" appuser
 
 COPY app ./app
 COPY scripts ./scripts
-COPY tests ./tests
 
 # Switch to non-root user
 USER appuser
