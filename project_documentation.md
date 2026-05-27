@@ -273,3 +273,118 @@ OPTO-PROFIT features a **dual-layer hydration and synchronization model**:
 ### 7.3 Operational Logging & Monitoring
 *   **Production Error Boundaries**: High-level React Error Boundaries prevent application crashes. In production mode, detailed stack traces are safely sanitized and piped to remote diagnostic services, displaying a professional, customized "Recovery Alert" interface to the end user.
 *   **Uptime Probes**: Dedicated `/api/status` endpoint provides real-time database connectivity verification and container health reports.
+
+---
+
+## 8. Deployment: Hosting, Domains & Environment Strategy
+
+Deploying the **OPTO-PROFIT** industrial engineering suite requires a robust, secure, and performant hosting architecture that decouples frontend client delivery from secure backend database transactions.
+
+```
+                           ┌────────────────────────────┐
+                           │   Vercel Global CDN Edge   │
+                           │   Static React Frontend    │
+                           └──────────────┬─────────────┘
+                                          │
+                                          │ HTTPS (Let's Encrypt SSL)
+                                          │ Requests API Data
+                                          ▼
+┌────────────────────────┐  TLS Connection  ┌────────────────────────────┐
+│  MongoDB Atlas Cluster  │◄────────────────┤ Backend Container Service  │
+│  Production DB Tier    │  (Port 27017)   │ (AWS ECS / Render / DO)    │
+└────────────────────────┘                  └────────────────────────────┘
+```
+
+---
+
+### 8.1 Hosting Platform Selection Matrix
+
+To accommodate different operational scales—ranging from simple engineering audits to enterprise manufacturing integrations—the hosting architecture supports two tiers.
+
+#### 8.1.1 Front-End Hosting: Vercel vs. Netlify
+
+*   **Vercel (Recommended — Production Standard)**:
+    *   *Benefits*: Native integration with Vite-React, automatic parsing and deployment of client-side rewrite rules via `frontend/vercel.json`, and optimized global edge asset streaming.
+    *   *Uptime*: 99.99% globally distributed serverless hosting.
+*   **Netlify (Alternative)**:
+    *   *Benefits*: Excellent form handling and previews. Requires a `netlify.toml` or `_redirects` file to override SPA router fallbacks.
+
+#### 8.1.2 Back-End Container Hosting
+
+| Platform | Deployment Type | Target Audience | Key Advantages | Cost Model |
+| :--- | :--- | :--- | :--- | :--- |
+| **AWS ECS (Fargate)** | Serverless Docker | **Enterprise Scale** | Multi-zone scaling, IAM access control, private VPC database peering, AWS ACM SSL. | Pay-as-you-go |
+| **DigitalOcean App Platform**| Container Instance | **Mid-Market / SME** | Fixed predictable pricing, easy integration with managed Mongo, secure SSL. | Flat Monthly |
+| **Render** | Docker Web Service | **Fast Startup / Free** | Immediate auto-deploys via Git webhooks, dynamic port binding, zero active dev overhead. | Free / Tiered |
+| **Heroku** | Container Dynos | **Legacy Tier** | Simplified CLI commands, but lacks modern multi-region free tiers. | Expensive |
+
+---
+
+### 8.2 Production Environment Variables Specification
+
+Production keys must reside securely in active container environment configurations and never be committed to source control.
+
+#### 8.2.1 Frontend Environment (`frontend/.env.production`)
+*   `VITE_API_BASE_URL`: Defines the external HTTPS address of the backend service (e.g. `https://api.optoprofit.com`).
+
+#### 8.2.2 Backend Environment Configuration
+
+| Environment Variable | Required Tier | Recommended Value / Source | Purpose |
+| :--- | :---: | :--- | :--- |
+| **`MONGODB_URI`** | CRITICAL | `mongodb+srv://<admin>:<password>@...` | Active production Mongo connection string. |
+| **`SESSION_SECRET`** | CRITICAL | High-entropy random 64-hex key string | Secures cookie hashes, user sessions, and 2FA keys. |
+| **`ENV`** | Required | `"production"` | Enables production DB schemas and limits verbose stack traces. |
+| **`ENABLE_HSTS`** | Highly Rec. | `"true"` | Instructs browser to strictly use TLS (HTTPS) connections. |
+| **`FRONTEND_ORIGIN`**| Required | `https://optoprofit.com` | Primary origin allowed for secure CORS handshakes. |
+| **`FRONTEND_ORIGINS`**| Optional | `https://optoprofit.com,https://www.optoprofit.com` | Comma-separated list of multiple allowed web origins. |
+| **`PORT`** | Auto-injected | Determined dynamically by cloud service (e.g., Render/AWS) | Binds Uvicorn execution loop to the assigned platform port. |
+
+---
+
+### 8.3 Domain Binding & HTTPS (SSL) Orchestration
+
+To bind a custom domain (e.g. `optoprofit.com`), DNS records must be configured in your domain registrar to map subdomains correctly.
+
+#### 8.3.1 DNS Record Matrix
+| Record Type | Host | Target / Destination | Associated Tier |
+| :---: | :---: | :--- | :---: |
+| **A Record** | `@` (Root) | `76.76.21.21` | Frontend (Vercel Edge) |
+| **CNAME** | `www` | `cname.vercel-dns.com` | Frontend (Vercel Subdomain) |
+| **CNAME** | `api` | `opto-profit-backend.onrender.com` (or AWS Load Balancer target) | Backend API endpoint |
+
+#### 8.3.2 Automated SSL/TLS Protocols
+*   **ACME Let's Encrypt**: Platforms like Vercel and Render coordinate automated SSL issuance and certificate rotations seamlessly via Let's Encrypt. Upon DNS propagation, domains automatically serve high-grade TLS 1.3 encryption.
+*   **AWS ACM**: For enterprise AWS deployments, AWS Certificate Manager handles programmatic certificate issuing, wildcards, and secure renewals behind the Application Load Balancer (ALB).
+
+---
+
+### 8.4 Production Build & Compilation Commands
+
+#### 8.4.1 Frontend Build pipeline
+Compile and bundle frontend production assets:
+```bash
+cd frontend
+npm ci
+npm run build
+```
+*Outputs static production bundles to `/frontend/dist` ready for static Vercel distribution.*
+
+#### 8.4.2 Backend Docker Execution
+Execute container builds locally or via CI/CD runner environments:
+```bash
+cd backend
+docker build -t optoprofit-backend:latest .
+docker run -p 8000:8000 --env-file .env optoprofit-backend:latest
+```
+
+---
+
+### 8.5 Production Pre-Flight Launch Checklist
+
+- [ ] **Database Integrity**: Confirm MongoDB Atlas cluster has backup retention enabled.
+- [ ] **Network Whitelisting**: Set MongoDB Atlas Network IP access appropriately (`0.0.0.0/0` for dynamic IPs or specific VPC blocks).
+- [ ] **Session Protection**: Generate a secure `SESSION_SECRET` that matches cryptographically high standards.
+- [ ] **CORS Verification**: Double-check that `FRONTEND_ORIGIN` aligns exactly with your live Vercel URL.
+- [ ] **HTTPS Routing**: Verify that all HTTP calls automatically redirect to HTTPS.
+- [ ] **Rate Limits**: Ensure frontend traffic routes are not hitting the backend rate limits prematurely (monitored via server request logs).
+
