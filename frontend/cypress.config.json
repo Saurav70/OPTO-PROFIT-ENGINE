@@ -1,0 +1,19 @@
+{
+  "e2e": {
+    "baseUrl": "http://localhost:5173",
+    "specPattern": "cypress/e2e/**/*.cy.{js,jsx}",
+    "supportFile": "cypress/support/e2e.js",
+    "viewportWidth": 1440,
+    "viewportHeight": 900,
+    "defaultCommandTimeout": 10000,
+    "pageLoadTimeout": 30000,
+    "video": false,
+    "screenshotOnRunFailure": true,
+    "env": {
+      "TEST_USERNAME": "cypress_e2e_user",
+      "TEST_PASSWORD": "CypressE2E1234!",
+      "TEST_EMAIL": "cypress@e2e.test",
+      "API_URL": "http://localhost:8000"
+    }
+  }
+}

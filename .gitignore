@@ -35,3 +35,9 @@ backend/**/*.pyc
 .env
 .env.*
 .aider*
+
+# Database files (SQLite)
+*.db
+*.sqlite
+*.sqlite3
+release/

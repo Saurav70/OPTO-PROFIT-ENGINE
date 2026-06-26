@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Activity, Network, Box, Grid, TrendingUp, Save, Info, Cpu, Printer, AlertTriangle, Trash2, FolderOpen, Plus, HelpCircle, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { calculateTaktTime, calculateNmin, calculateROI, calculateCriticalPath } from '../utils/optimizer';
@@ -10,27 +10,37 @@ const Dashboard = ({ tasks, config, setConfig, onNavigate, profiles, activeProfi
   const [editingFormulaKey, setEditingFormulaKey] = useState(null);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('variables'); // 'variables' or 'formulas'
-  const [zoneA, setZoneA] = useState('');
-  const [zoneB, setZoneB] = useState('');
   // P1-6: Inline state for adding formulas and zones (replaces prompt/alert)
   const [newFormulaName, setNewFormulaName] = useState('');
   const [showNewFormulaInput, setShowNewFormulaInput] = useState(false);
-  const [newZoneName, setNewZoneName] = useState('');
-  const [showNewZoneInput, setShowNewZoneInput] = useState(false);
+
 
   const variables = config?.variables || [];
   const formulas = config?.formulas || {};
 
-  const taktTime = calculateTaktTime(config);
+  const [taktTime, setTaktTime] = useState(0);
+  const [roi, setRoi] = useState({});
+
+  useEffect(() => {
+    let cancelled = false;
+    const compute = async () => {
+      const takt = await calculateTaktTime(config);
+      const roiData = await calculateROI(tasks, config, optimization || {});
+      if (!cancelled) {
+        setTaktTime(takt);
+        setRoi(roiData);
+      }
+    };
+    compute();
+    return () => { cancelled = true; };
+  }, [tasks, config, optimization]);
+
   const nMin = calculateNmin(tasks, taktTime);
   const totalTime = tasks.reduce((sum, t) => sum + t.time, 0);
-  const roi = calculateROI(tasks, config, optimization || {});
   const { criticalStation } = calculateCriticalPath(tasks, optimization?.stations || []);
 
   const effValue = parseFloat(optimization?.efficiency || '0');
   const isLowEfficiency = effValue < 70;
-
-  const handlePrintReport = () => { window.print(); };
 
   const handleCreateProfile = () => {
     if (!newProfileName.trim()) return;
@@ -82,49 +92,7 @@ const Dashboard = ({ tasks, config, setConfig, onNavigate, profiles, activeProfi
     setConfig({ ...config, formulas: newFormulas });
   };
 
-  const addZone = () => {
-    const zone = newZoneName.trim();
-    if (!zone || (config.custom_zones || []).includes(zone)) {
-      setNewZoneName('');
-      return;
-    }
-    setConfig({ ...config, custom_zones: [...(config.custom_zones || []), zone] });
-    setNewZoneName('');
-    setShowNewZoneInput(false);
-  };
 
-  const removeZone = (zone) => {
-    const nextZones = (config.custom_zones || []).filter(z => z !== zone);
-    const nextExclusions = Object.fromEntries(
-      Object.entries(config.zone_exclusions || {})
-        .filter(([source]) => source !== zone)
-        .map(([source, targets]) => [source, targets.filter(target => target !== zone)])
-        .filter(([, targets]) => targets.length > 0)
-    );
-    setConfig({ ...config, custom_zones: nextZones, zone_exclusions: nextExclusions });
-  };
-
-  const addZoneExclusion = () => {
-    if (!zoneA || !zoneB || zoneA === zoneB) return;
-    const nextExclusions = { ...(config.zone_exclusions || {}) };
-    nextExclusions[zoneA] = [...new Set([...(nextExclusions[zoneA] || []), zoneB])];
-    nextExclusions[zoneB] = [...new Set([...(nextExclusions[zoneB] || []), zoneA])];
-    setConfig({ ...config, zone_exclusions: nextExclusions });
-  };
-
-  const removeZoneExclusion = (left, right) => {
-    const nextExclusions = { ...(config.zone_exclusions || {}) };
-    nextExclusions[left] = (nextExclusions[left] || []).filter(zone => zone !== right);
-    nextExclusions[right] = (nextExclusions[right] || []).filter(zone => zone !== left);
-    Object.keys(nextExclusions).forEach(key => {
-      if (nextExclusions[key].length === 0) delete nextExclusions[key];
-    });
-    setConfig({ ...config, zone_exclusions: nextExclusions });
-  };
-
-  const zoneExclusionPairs = Object.entries(config.zone_exclusions || {})
-    .flatMap(([left, targets]) => targets.map(right => [left, right]))
-    .filter(([left, right]) => left < right);
 
   const containerVariants = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.1 } } };
   const itemVariants = { hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' } } };
@@ -136,15 +104,10 @@ const Dashboard = ({ tasks, config, setConfig, onNavigate, profiles, activeProfi
       exit={{ opacity: 0 }}
       style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg-main)', borderRadius: 'var(--radius-lg)', overflow: 'hidden', border: '1px solid var(--border-color)', transition: 'var(--transition-smooth)' }}
     >
-      <div style={{ padding: '1.5rem 2rem 0 2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className="responsive-header" style={{ padding: '1.5rem 2rem 0 2rem' }}>
         <div>
 
           <h2 className="header-title" style={{ margin: 0, fontSize: '1.4rem', color: 'var(--text-white)' }}>PRODUCTION DASHBOARD</h2>
-        </div>
-        <div className="no-print" style={{ display: 'flex', gap: '1rem' }}>
-          <button onClick={handlePrintReport} className="btn-outline" style={{ padding: '0.6rem 1.2rem', borderRadius: 'var(--radius-md)', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Printer size={14} /> GENERATE EXECUTIVE REPORT
-          </button>
         </div>
       </div>
 
@@ -168,7 +131,7 @@ const Dashboard = ({ tasks, config, setConfig, onNavigate, profiles, activeProfi
                 <HelpCircle size={10} color="var(--text-sub)" style={{ opacity: 0.4 }} />
               </div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-                <span style={{ fontSize: '1.8rem', fontWeight: 900, color: 'var(--text-white)' }}>{m.val}</span>
+                <span className="kpi-value">{m.val}</span>
                 {m.sub && <span style={{ fontSize: '0.8rem', color: 'var(--text-sub)', fontWeight: 600 }}>{m.sub}</span>}
               </div>
             </motion.div>
@@ -179,8 +142,8 @@ const Dashboard = ({ tasks, config, setConfig, onNavigate, profiles, activeProfi
         <div className="grid-2fr-1fr">
 
           {/* Performance Control Panel */}
-          <motion.div variants={itemVariants} className="glow-card" style={{ display: 'flex', flexDirection: 'column' }}>
-            <div style={{ padding: '1.2rem 1.5rem', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <motion.div id="dashboard-gauge-card" variants={itemVariants} className="glow-card" style={{ display: 'flex', flexDirection: 'column' }}>
+            <div className="responsive-header" style={{ padding: '1.2rem 1.5rem', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)' }}>
               <div>
                 <h3 className="header-title" style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-white)' }}>CORE PERFORMANCE ANALYTICS</h3>
                 <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-sub)', fontWeight: 600 }}>Theoretical Balance Index vs. Actual Factory Simulation</p>
@@ -192,7 +155,7 @@ const Dashboard = ({ tasks, config, setConfig, onNavigate, profiles, activeProfi
 
             <div className="gauge-panel">
               {/* Industrial Gauge */}
-              <div style={{ position: 'relative', width: '200px', height: '200px' }}>
+              <div className="gauge-svg-container">
                 <svg width="200" height="200" viewBox="0 0 200 200">
                   <circle cx="100" cy="100" r="90" fill="none" stroke="var(--bg-tertiary)" strokeWidth="12" />
                   <motion.circle
@@ -209,7 +172,7 @@ const Dashboard = ({ tasks, config, setConfig, onNavigate, profiles, activeProfi
                 </svg>
                 <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
                   <span style={{ fontSize: '0.75rem', fontWeight: 900, color: 'var(--text-sub)', letterSpacing: '1px' }}>RATING</span>
-                  <span style={{ fontSize: '3rem', fontWeight: 900, color: isLowEfficiency ? 'var(--accent-danger)' : 'var(--accent-primary)', lineHeight: 1 }}>{effValue.toFixed(0)}<sub style={{ fontSize: '1rem', bottom: '0.2rem' }}>%</sub></span>
+                  <span className="gauge-value" style={{ color: isLowEfficiency ? 'var(--accent-danger)' : 'var(--accent-primary)' }}>{effValue.toFixed(0)}<sub style={{ fontSize: '1rem', bottom: '0.2rem' }}>%</sub></span>
                   <span style={{ fontSize: '0.65rem', fontWeight: 700, background: isLowEfficiency ? 'var(--accent-danger)20' : 'var(--accent-primary)20', color: isLowEfficiency ? 'var(--accent-danger)' : 'var(--accent-primary)', padding: '2px 8px', borderRadius: '10px', marginTop: '5px' }}>
                     {isLowEfficiency ? 'INEFFICIENT' : 'OPTIMAL'}
                   </span>
@@ -217,7 +180,7 @@ const Dashboard = ({ tasks, config, setConfig, onNavigate, profiles, activeProfi
               </div>
 
               {/* Meta Stats Grid */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem', flex: 1 }}>
+              <div className="responsive-gauge-stats">
                 <div>
                   <h6 style={{ margin: '0 0 6px 0', fontSize: '0.75rem', color: 'var(--text-sub)', fontWeight: 900, letterSpacing: '1px' }}>OPTIMIZED TAKT</h6>
                   <p style={{ margin: 0, fontSize: '1.6rem', fontWeight: 900, color: 'var(--text-white)' }}>{taktTime.toFixed(1)} <sub style={{ fontSize: '0.8rem', color: 'var(--text-sub)' }}>min</sub></p>
@@ -238,8 +201,8 @@ const Dashboard = ({ tasks, config, setConfig, onNavigate, profiles, activeProfi
             </div>
 
             {/* Financial Quick View Footer */}
-            <div style={{ marginTop: 'auto', borderTop: '1px solid var(--border-color)', background: 'var(--bg-tertiary)', padding: '1rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', gap: '2rem' }}>
+            <div className="dashboard-footer-bar responsive-footer-bar">
+              <div className="dashboard-footer-inner">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                   <span style={{ fontSize: '0.6rem', fontWeight: 900, color: 'var(--text-sub)', letterSpacing: '1px' }}>ROI LIFT / MONTH</span>
                   <span style={{ fontSize: '1rem', fontWeight: 900, color: (roi.profitIncrease || 0) >= 0 ? 'var(--accent-primary)' : 'var(--accent-danger)' }}>
@@ -251,7 +214,7 @@ const Dashboard = ({ tasks, config, setConfig, onNavigate, profiles, activeProfi
                   <span style={{ fontSize: '1rem', fontWeight: 900, color: 'var(--text-white)' }}>{roi.dailyProduction || 0} <sub style={{ fontSize: '0.65rem', color: 'var(--text-sub)' }}>units</sub></span>
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: '1rem' }}>
+              <div className="dashboard-footer-actions">
                 <button onClick={() => onNavigate('financials')} style={{ background: 'transparent', border: 'none', color: 'var(--accent-primary)', fontSize: '0.7rem', fontWeight: 900, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', letterSpacing: '1px' }}>
                   FULL ROI REPORT <TrendingUp size={14} />
                 </button>
@@ -306,7 +269,7 @@ const Dashboard = ({ tasks, config, setConfig, onNavigate, profiles, activeProfi
 
         {/* Navigation Grid Section */}
         <div className="no-print" style={{ borderTop: '2px solid var(--border-color)', paddingTop: '2rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem' }}>
+          <div className="responsive-header" style={{ marginBottom: '1.2rem' }}>
             <h3 className="header-title" style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-sub)' }}>SYSTEM MODULES & CONFIGURATION</h3>
             <button 
               onClick={() => setIsConfigOpen(!isConfigOpen)} 
@@ -326,10 +289,9 @@ const Dashboard = ({ tasks, config, setConfig, onNavigate, profiles, activeProfi
                 style={{ overflow: 'hidden', marginBottom: '2rem' }}
               >
                 <div className="glow-card" style={{ padding: '1.5rem', background: 'var(--bg-tertiary)', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                  <div style={{ display: 'flex', gap: '2rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
+                  <div className="responsive-config-tabs">
                     <button onClick={() => setActiveTab('variables')} style={{ background: 'transparent', border: 'none', color: activeTab === 'variables' ? 'var(--accent-primary)' : 'var(--text-sub)', fontWeight: 900, fontSize: '0.75rem', letterSpacing: '1px', paddingBottom: '0.5rem', borderBottom: activeTab === 'variables' ? '2px solid var(--accent-primary)' : 'none' }}>DYNAMIC VARIABLES</button>
                     <button onClick={() => setActiveTab('formulas')} style={{ background: 'transparent', border: 'none', color: activeTab === 'formulas' ? 'var(--accent-primary)' : 'var(--text-sub)', fontWeight: 900, fontSize: '0.75rem', letterSpacing: '1px', paddingBottom: '0.5rem', borderBottom: activeTab === 'formulas' ? '2px solid var(--accent-primary)' : 'none' }}>MATHEMATICAL MODELS</button>
-                    <button onClick={() => setActiveTab('zones')} style={{ background: 'transparent', border: 'none', color: activeTab === 'zones' ? 'var(--accent-primary)' : 'var(--text-sub)', fontWeight: 900, fontSize: '0.75rem', letterSpacing: '1px', paddingBottom: '0.5rem', borderBottom: activeTab === 'zones' ? '2px solid var(--accent-primary)' : 'none' }}>MANUFACTURING ZONES</button>
                   </div>
 
                   {activeTab === 'variables' && (
@@ -412,79 +374,6 @@ const Dashboard = ({ tasks, config, setConfig, onNavigate, profiles, activeProfi
                     </div>
                   )}
 
-                  {activeTab === 'zones' && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                      <div>
-                        <h4 style={{ fontSize: '0.7rem', fontWeight: 900, color: 'var(--text-sub)', marginBottom: '10px' }}>AVAILABLE PRODUCTION ZONES</h4>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                          {(config.custom_zones || []).map(zone => (
-                            <div key={zone} style={{ background: 'var(--bg-main)', border: '1px solid var(--accent-primary)', color: 'var(--accent-primary)', padding: '4px 12px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              {zone}
-                              <X size={12} style={{ cursor: 'pointer' }} onClick={() => removeZone(zone)} />
-                            </div>
-                          ))}
-                          {showNewZoneInput ? (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <input
-                                value={newZoneName}
-                                onChange={e => setNewZoneName(e.target.value)}
-                                onKeyDown={e => e.key === 'Enter' && addZone()}
-                                placeholder="Zone name..."
-                                className="industrial-input"
-                                style={{ width: '130px', padding: '4px 10px', fontSize: '0.72rem' }}
-                                autoFocus
-                              />
-                              <button onClick={addZone} className="btn-primary" style={{ padding: '4px 10px', fontSize: '0.65rem', borderRadius: '16px' }}>ADD</button>
-                              <button onClick={() => { setShowNewZoneInput(false); setNewZoneName(''); }} style={{ background: 'transparent', border: 'none', color: 'var(--text-sub)', cursor: 'pointer' }}><X size={12} /></button>
-                            </div>
-                          ) : (
-                            <button 
-                              onClick={() => setShowNewZoneInput(true)}
-                              style={{ background: 'var(--accent-primary)20', border: '1px dashed var(--accent-primary)', color: 'var(--accent-primary)', padding: '4px 12px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 700 }}
-                            >
-                              + ADD ZONE
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) auto', gap: '0.75rem', alignItems: 'end' }}>
-                        <div>
-                          <label style={{ fontSize: '0.65rem', fontWeight: 900, color: 'var(--text-sub)', display: 'block', marginBottom: '0.35rem' }}>ZONE A</label>
-                          <select value={zoneA} onChange={(e) => setZoneA(e.target.value)} className="industrial-input" style={{ width: '100%' }}>
-                            <option value="">Select zone</option>
-                            {(config.custom_zones || []).map(zone => <option key={zone} value={zone}>{zone}</option>)}
-                          </select>
-                        </div>
-                        <div>
-                          <label style={{ fontSize: '0.65rem', fontWeight: 900, color: 'var(--text-sub)', display: 'block', marginBottom: '0.35rem' }}>CANNOT SHARE WITH</label>
-                          <select value={zoneB} onChange={(e) => setZoneB(e.target.value)} className="industrial-input" style={{ width: '100%' }}>
-                            <option value="">Select zone</option>
-                            {(config.custom_zones || []).map(zone => <option key={zone} value={zone}>{zone}</option>)}
-                          </select>
-                        </div>
-                        <button onClick={addZoneExclusion} className="btn-primary" style={{ padding: '0.62rem 1rem', fontSize: '0.7rem' }}>
-                          ADD RULE
-                        </button>
-                      </div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                        {zoneExclusionPairs.length === 0 ? (
-                          <span style={{ fontSize: '0.7rem', color: 'var(--text-sub)', fontWeight: 700 }}>No incompatibility rules defined.</span>
-                        ) : (
-                          zoneExclusionPairs.map(([left, right]) => (
-                            <div key={`${left}-${right}`} style={{ background: 'var(--bg-main)', border: '1px solid var(--accent-warning)', color: 'var(--accent-warning)', padding: '5px 12px', borderRadius: '20px', fontSize: '0.72rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              {left} / {right}
-                              <X size={12} style={{ cursor: 'pointer' }} onClick={() => removeZoneExclusion(left, right)} />
-                            </div>
-                          ))
-                        )}
-                      </div>
-                      <div style={{ background: 'rgba(0,0,0,0.05)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                        <p style={{ margin: 0, fontSize: '0.7rem', color: 'var(--text-sub)' }}>
-                          <strong>Note:</strong> Zone incompatibility rules are enforced by the optimizer when tasks are assigned to stations.
-                        </p>
-                      </div>
-                    </div>
-                  )}
                 </div>
               </motion.div>
             )}

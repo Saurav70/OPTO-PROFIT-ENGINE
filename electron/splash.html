@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OPTO-PROFIT — Loading</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;500;700;900&display=swap');
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: transparent;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      overflow: hidden;
+      -webkit-app-region: drag;
+      user-select: none;
+    }
+
+    .splash-container {
+      width: 440px;
+      height: 320px;
+      background: linear-gradient(
+        135deg,
+        rgba(10, 10, 26, 0.97) 0%,
+        rgba(15, 23, 42, 0.97) 40%,
+        rgba(20, 30, 60, 0.97) 100%
+      );
+      border-radius: 24px;
+      border: 1px solid rgba(99, 179, 237, 0.15);
+      box-shadow:
+        0 32px 64px rgba(0, 0, 0, 0.5),
+        0 0 80px rgba(99, 179, 237, 0.08),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Ambient glow effect */
+    .splash-container::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(
+        ellipse at 30% 20%,
+        rgba(99, 179, 237, 0.06) 0%,
+        transparent 50%
+      );
+      animation: ambient-shift 8s ease-in-out infinite;
+    }
+
+    @keyframes ambient-shift {
+      0%, 100% { transform: translate(0, 0) rotate(0deg); }
+      33% { transform: translate(5%, 3%) rotate(2deg); }
+      66% { transform: translate(-3%, -2%) rotate(-1deg); }
+    }
+
+    .logo-mark {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .logo-icon {
+      width: 52px;
+      height: 52px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, #63b3ed 0%, #4299e1 50%, #3182ce 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow:
+        0 4px 16px rgba(99, 179, 237, 0.3),
+        0 0 24px rgba(99, 179, 237, 0.15);
+      animation: icon-pulse 3s ease-in-out infinite;
+    }
+
+    @keyframes icon-pulse {
+      0%, 100% { box-shadow: 0 4px 16px rgba(99, 179, 237, 0.3), 0 0 24px rgba(99, 179, 237, 0.15); }
+      50% { box-shadow: 0 4px 24px rgba(99, 179, 237, 0.5), 0 0 40px rgba(99, 179, 237, 0.25); }
+    }
+
+    .logo-icon svg {
+      width: 28px;
+      height: 28px;
+    }
+
+    .logo-text {
+      font-size: 28px;
+      font-weight: 900;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #e2e8f0 0%, #a0aec0 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .logo-text span {
+      background: linear-gradient(135deg, #63b3ed 0%, #4299e1 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .subtitle {
+      position: relative;
+      z-index: 1;
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: rgba(160, 174, 192, 0.7);
+    }
+
+    .loading-section {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      margin-top: 8px;
+    }
+
+    .progress-track {
+      width: 200px;
+      height: 3px;
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      height: 100%;
+      width: 40%;
+      background: linear-gradient(90deg, #63b3ed, #4299e1, #63b3ed);
+      background-size: 200% 100%;
+      border-radius: 4px;
+      animation: progress-slide 1.8s ease-in-out infinite;
+    }
+
+    @keyframes progress-slide {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(350%); }
+    }
+
+    .loading-text {
+      font-size: 13px;
+      font-weight: 300;
+      color: rgba(160, 174, 192, 0.6);
+      animation: text-fade 2s ease-in-out infinite;
+    }
+
+    @keyframes text-fade {
+      0%, 100% { opacity: 0.6; }
+      50% { opacity: 1; }
+    }
+
+    .version {
+      position: absolute;
+      bottom: 16px;
+      right: 20px;
+      font-size: 10px;
+      font-weight: 500;
+      color: rgba(160, 174, 192, 0.3);
+      z-index: 1;
+    }
+  </style>
+</head>
+<body>
+  <div class="splash-container">
+    <div class="logo-mark">
+      <div class="logo-icon">
+        <!-- Gear/cog icon representing industrial engineering -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </div>
+      <div class="logo-text">OPTO<span>-PROFIT</span></div>
+    </div>
+
+    <div class="subtitle">Industrial Engineering Toolkit</div>
+
+    <div class="loading-section">
+      <div class="progress-track">
+        <div class="progress-bar"></div>
+      </div>
+      <div class="loading-text">Starting optimization engine…</div>
+    </div>
+
+    <div class="version">v1.0.0</div>
+  </div>
+</body>
+</html>

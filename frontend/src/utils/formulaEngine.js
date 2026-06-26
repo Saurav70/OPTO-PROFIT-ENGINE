@@ -1,4 +1,14 @@
-import { evaluate } from 'mathjs';
+// Lazy-load mathjs to keep it out of the critical-path bundle (~665 KiB).
+// The first call to getEvaluate() triggers the dynamic import; subsequent
+// calls reuse the cached reference.
+let _evaluate = null;
+const getEvaluate = async () => {
+  if (!_evaluate) {
+    const mathjs = await import('mathjs');
+    _evaluate = mathjs.evaluate;
+  }
+  return _evaluate;
+};
 
 /**
  * Builds a data context from config variables for formula evaluation.
@@ -14,11 +24,12 @@ export const buildContext = (variables, extraContext = {}) => {
 };
 
 /**
- * Evaluates a formula string using mathjs.
+ * Evaluates a formula string using mathjs (async — loads mathjs on demand).
  */
-export const evaluateFormula = (formula, context) => {
+export const evaluateFormula = async (formula, context) => {
   if (!formula) return 0;
   try {
+    const evaluate = await getEvaluate();
     // mathjs handles ternary logic like (a > b) ? c : d
     const result = evaluate(formula, context);
     return typeof result === 'number' ? result : 0;

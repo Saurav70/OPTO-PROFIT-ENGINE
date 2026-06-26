@@ -18,13 +18,13 @@ const getTotalTaskTime = (tasks) => tasks.reduce((sum, task) => sum + getTaskTim
 
 /* ─── Cycle Time (C) ─── */
 // C = Available Production Time / Daily Demand
-export const calculateTaktTime = (config) => {
+export const calculateTaktTime = async (config) => {
   const formulas = config?.formulas || {};
   const variables = config?.variables || [];
 
   if (formulas.TaktTime) {
     const context = buildContext(variables);
-    return evaluateFormula(formulas.TaktTime, context);
+    return await evaluateFormula(formulas.TaktTime, context);
   }
 
   const availableTime = getVariableValue(variables, 'shift_time', 0);
@@ -172,6 +172,39 @@ export const runOptimization = (tasks, taktTime, heuristic = 'LTF', config = {})
         if (isExcluded) continue;
       }
 
+      // ── Co-location Constraint Check (reads from config.co_locations) ──
+      const coLocations = config?.co_locations || [];
+      let coLocationConflict = false;
+      for (const group of coLocations) {
+        if (group.includes(task.id)) {
+          for (const peerId of group) {
+            if (peerId === task.id) continue;
+            const peerStationIdx = stations.findIndex(s => s.tasks.some(t => t.id === peerId));
+            if (peerStationIdx !== -1) {
+              coLocationConflict = true;
+              break;
+            }
+          }
+        }
+        if (coLocationConflict) break;
+      }
+      if (coLocationConflict) continue;
+
+      // ── Separation Constraint Check (reads from config.separations) ──
+      const separations = config?.separations || [];
+      let separationConflict = false;
+      const currentStationTaskIds = currentStation.tasks.map(t => t.id);
+      for (const pair of separations) {
+        if (pair.includes(task.id)) {
+          const otherId = pair.find(id => id !== task.id);
+          if (currentStationTaskIds.includes(otherId)) {
+            separationConflict = true;
+            break;
+          }
+        }
+      }
+      if (separationConflict) continue;
+
       bestTask = task;
       break;
     }
@@ -222,6 +255,36 @@ export const runOptimization = (tasks, taktTime, heuristic = 'LTF', config = {})
     meetsTarget: efficiency >= targetEfficiency,
     targetEfficiency: targetEfficiency
   };
+};
+
+/* ─── Takt Time Sweep Engine (Sweep Chart) ─── */
+export const runTaktTimeSweep = (tasks, minTakt, maxTakt, heuristic = 'LTF', config = {}) => {
+  if (!tasks || tasks.length === 0) return [];
+
+  const bottleneck = tasks.length > 0 ? Math.max(...tasks.map(t => getTaskTime(t))) : 0;
+  const totalTime = getTotalTaskTime(tasks);
+
+  const start = Math.max(bottleneck, minTakt || bottleneck || 1);
+  const end = Math.max(start + 1, maxTakt || totalTime || (start + 10));
+
+  const points = [];
+  const range = end - start;
+
+  // Calculate a step size to generate a maximum of 100 points for high performance
+  const step = Math.max(1, Math.ceil(range / 100));
+
+  for (let takt = start; takt <= end; takt += step) {
+    const opt = runOptimization(tasks, takt, heuristic, config);
+    points.push({
+      taktTime: takt,
+      stationCount: opt.nActual,
+      efficiency: Number(opt.efficiency),
+      balanceDelay: Number(opt.balanceDelay),
+      smoothnessIndex: Number(opt.smoothnessIndex)
+    });
+  }
+
+  return points;
 };
 
 /* ─── Critical Path Analysis (Forward-Backward Pass) ─── */
@@ -304,11 +367,11 @@ export const calculateCriticalPath = (tasks, stations) => {
 
 /* ─── Formula Trace Generator ─── */
 // Returns a structured array of formula derivation steps for live display.
-export const generateFormulaTrace = (tasks, config, optimization) => {
+export const generateFormulaTrace = async (tasks, config, optimization) => {
   const variables = config?.variables || [];
   const T = getVariableValue(variables, 'shift_time', 480);
   const D = getVariableValue(variables, 'demand', 1);
-  const C = calculateTaktTime(config); // Use the dynamic calculator
+  const C = await calculateTaktTime(config); // Use the dynamic calculator
   const sumT = getTotalTaskTime(tasks);
   const Nmin = C > 0 ? Math.ceil(sumT / C) : 0;
   const N = optimization?.nActual || 0;
@@ -378,19 +441,20 @@ export const generateFormulaTrace = (tasks, config, optimization) => {
 };
 
 /* ─── Financial ROI Calculations ─── */
-export const calculateROI = (tasks, config, optimization) => {
+export const calculateROI = async (tasks, config, optimization) => {
   const variables = config?.variables || [];
   const shiftTime = getVariableValue(variables, 'shift_time', 0);
   const demand = getVariableValue(variables, 'demand', 0);
   const unitPrice = getVariableValue(variables, 'unit_price', 0);
   const unitCost = getVariableValue(variables, 'unit_cost', 0);
   const workDays = getVariableValue(variables, 'work_days', 0);
-  const currentCycleTime = getVariableValue(variables, 'current_cycle_time', calculateTaktTime(config));
+  const taktFallback = await calculateTaktTime(config);
+  const currentCycleTime = getVariableValue(variables, 'current_cycle_time', taktFallback);
   const currentOperators = getVariableValue(variables, 'current_operators', optimization?.nActual || 0);
   const operatorCostPerHour = getVariableValue(variables, 'operator_cost_per_hour', 0);
   const investmentCost = getVariableValue(variables, 'investment_cost', 0);
 
-  const optimizedCycleTime = optimization?.actualCycleTime || calculateTaktTime(config);
+  const optimizedCycleTime = optimization?.actualCycleTime || taktFallback;
   const optimizedOperators = optimization?.nActual || 0;
   const contributionMargin = unitPrice - unitCost;
   const laborHoursPerDay = shiftTime / 60;

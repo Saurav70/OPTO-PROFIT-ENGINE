@@ -8,8 +8,16 @@ import { api } from '../services/api';
 const FinancialAnalytics = ({ tasks, config, optimization }) => {
   const [liveChart, setLiveChart] = useState(false);
   const [serverRoi, setServerRoi] = useState(null);
+  const [localRoi, setLocalRoi] = useState({});
 
-  const localRoi = calculateROI(tasks, config, optimization || {});
+  useEffect(() => {
+    let cancelled = false;
+    calculateROI(tasks, config, optimization || {}).then(data => {
+      if (!cancelled) setLocalRoi(data);
+    });
+    return () => { cancelled = true; };
+  }, [tasks, config, optimization]);
+
   // P2-9: liveChart toggle controls data source — server (live) vs local (static)
   const roi = (liveChart && serverRoi) ? serverRoi : localRoi;
   
@@ -92,7 +100,7 @@ const FinancialAnalytics = ({ tasks, config, optimization }) => {
       style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg-main)', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border-color)', boxShadow: '0 20px 50px rgba(0,0,0,0.1)', transition: 'all 0.3s ease' }}
     >
       {/* Header */}
-      <div style={{ padding: '1.5rem 2rem 0 2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className="responsive-header" style={{ padding: '1.5rem 2rem 0 2rem' }}>
         <div>
 
           <h2 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 900, color: 'var(--text-white)', letterSpacing: '1px' }}>FINANCIAL ANALYTICS</h2>
@@ -117,7 +125,7 @@ const FinancialAnalytics = ({ tasks, config, optimization }) => {
                 <m.icon size={16} color={m.color} />
                 <span style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--text-sub)', letterSpacing: '0.5px' }}>{m.label}</span>
               </div>
-              <div style={{ fontSize: '2rem', fontWeight: 900, color: 'var(--text-white)' }}>{m.val}</div>
+              <div className="kpi-value">{m.val}</div>
             </div>
           ))}
         </div>
@@ -126,7 +134,7 @@ const FinancialAnalytics = ({ tasks, config, optimization }) => {
 
           {/* Profitability Chart Panel */}
           <div style={{ background: 'var(--card-bg)', borderRadius: '12px', border: '1px solid var(--border-color)', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', overflow: 'hidden', display: 'flex', flexDirection: 'column', transition: 'all 0.3s ease' }}>
-            <div style={{ padding: '1.2rem 1.5rem', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="responsive-header" style={{ padding: '1.2rem 1.5rem', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)' }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 900, color: 'var(--text-white)' }}>PROFITABILITY FORECAST</h3>
                 <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-sub)', fontWeight: 600 }}>Optimized (Solid) vs Baseline (Dashed) Projection</p>
@@ -141,7 +149,7 @@ const FinancialAnalytics = ({ tasks, config, optimization }) => {
               </motion.button>
             </div>
 
-            <div style={{ padding: '2.5rem', flex: 1, position: 'relative' }}>
+            <div className="chart-scroll-container" style={{ padding: '2.5rem', flex: 1, position: 'relative' }}>
               <div style={{ width: '100%', height: '240px', borderBottom: '2px solid var(--border-color)', borderLeft: '2px solid var(--border-color)', position: 'relative' }}>
                 <svg width="100%" height="100%" viewBox="0 0 1000 240" style={{ overflow: 'visible' }}>
                   <defs>
@@ -163,10 +171,10 @@ const FinancialAnalytics = ({ tasks, config, optimization }) => {
                 </svg>
 
                 {/* Y-axis labels */}
-                <div style={{ position: 'absolute', top: '10px', left: '-50px', fontSize: '0.65rem', color: 'var(--text-sub)', fontWeight: 800 }}>
+                <div className="chart-y-label" style={{ top: '10px' }}>
                   {formatCurrency(maxVal, variables)}
                 </div>
-                <div style={{ position: 'absolute', bottom: '0', left: '-50px', fontSize: '0.65rem', color: 'var(--text-sub)', fontWeight: 800 }}>{formatCurrency(0, variables)}</div>
+                <div className="chart-y-label" style={{ bottom: '0' }}>{formatCurrency(0, variables)}</div>
               </div>
 
               {/* X-axis labels */}
@@ -221,7 +229,7 @@ const FinancialAnalytics = ({ tasks, config, optimization }) => {
 
         {/* Operational Cost Audit */}
         <div style={{ background: 'var(--card-bg)', borderRadius: '12px', border: '1px solid var(--border-color)', overflow: 'hidden', transition: 'all 0.3s ease' }}>
-          <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid var(--border-color)', background: 'var(--bg-secondary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div className="responsive-header" style={{ padding: '1rem 1.5rem', borderBottom: '1px solid var(--border-color)', background: 'var(--bg-secondary)' }}>
             <h4 style={{ margin: 0, fontSize: '0.85rem', fontWeight: 900, color: 'var(--text-white)' }}>OPERATIONAL COST AUDIT</h4>
             <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-sub)' }}>{new Date().toLocaleDateString()}</div>
           </div>

@@ -39,7 +39,7 @@ class AnalyticsRoiTest(unittest.IsolatedAsyncioTestCase):
             },
         }
 
-        result = await get_roi_impact(payload)
+        result = get_roi_impact(payload)
 
         self.assertEqual(result["baselineDailyProduction"], 12)
         self.assertEqual(result["dailyProduction"], 16)
@@ -73,7 +73,7 @@ class AnalyticsRoiTest(unittest.IsolatedAsyncioTestCase):
             },
         }
 
-        result = await get_roi_impact(payload)
+        result = get_roi_impact(payload)
 
         # Baseline Daily Production = min(5, 480 // 120) = 4
         # Optimized Daily Production = min(5, 480 // 96) = 5
@@ -117,7 +117,7 @@ class AnalyticsRoiTest(unittest.IsolatedAsyncioTestCase):
             },
         }
 
-        result = await get_roi_impact(payload)
+        result = get_roi_impact(payload)
 
         # Baseline Daily Production = min(1200, 960 // 1.2) = 800
         # Optimized Daily Production = min(1200, 960 // 0.8) = 1200
@@ -161,7 +161,7 @@ class AnalyticsRoiTest(unittest.IsolatedAsyncioTestCase):
             },
         }
 
-        result = await get_roi_impact(payload)
+        result = get_roi_impact(payload)
 
         # Baseline Daily Production = min(80, 480 // 8) = 60
         # Optimized Daily Production = min(80, 480 // 6) = 80

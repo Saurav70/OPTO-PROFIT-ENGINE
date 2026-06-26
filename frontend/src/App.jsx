@@ -1,12 +1,20 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { LayoutDashboard, Settings, Network, Box, Zap, Grid, TrendingUp, Menu } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from './services/api';
 import Sidebar from './components/Sidebar';
-import SettingsLayout from './components/SettingsLayout';
+import SettingsModal from './components/SettingsModal';
 import ErrorBoundary from './components/ErrorBoundary';
 import SplashScreen from './components/SplashScreen';
 import ToastContainer, { useToast } from './components/Toast';
+import DashboardLayout from './components/DashboardLayout';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { useAuthStore } from './store/useAuthStore';
+import ProtectedRoute from './components/ProtectedRoute';
+import Login from './components/Login';
+import Register from './components/Register';
+import useEngineStore from './stores/useEngineStore';
+import LicenseActivation from './components/LicenseActivation';
 
 // Lazy-loaded components for performance
 const Welcome = lazy(() => import('./components/Welcome'));
@@ -28,7 +36,7 @@ const SkeletonLoader = () => (
         <div key={i} className="skeleton" style={{ flex: 1, height: '100px', borderRadius: '8px' }} />
       ))}
     </div>
-    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '2rem', flex: 1 }}>
+    <div className="skeleton-grid">
       <div className="skeleton industrial-pattern" style={{ borderRadius: '12px' }} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
         <div className="skeleton" style={{ flex: 1, borderRadius: '12px' }} />
@@ -58,13 +66,14 @@ const App = () => {
   const [currentScreen, setCurrentScreen] = useState('welcome');
   const [authChecked, setAuthChecked] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [authError, setAuthError] = useState('');
   const [darkMode, setDarkMode] = useState(savedDarkMode ? JSON.parse(savedDarkMode) : false);
   const [isLoading, setIsLoading] = useState(false);
   const [maxStepReached, setMaxStepReached] = useState(0);
-  const [twoFactorRequired, setTwoFactorRequired] = useState(false); // New state for 2FA
-  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [userData, setUserData] = useState(null);
+
+  const [isActivated, setIsActivated] = useState(false);
+  const [isCheckingLicense, setIsCheckingLicense] = useState(true);
 
   const [tasks, setTasks] = useState(() => { try { return savedTasks ? JSON.parse(savedTasks) : []; } catch { return []; } });
   const [config, setConfig] = useState(() => { try { return savedConfig ? JSON.parse(savedConfig) : {}; } catch { return {}; } });
@@ -75,33 +84,39 @@ const App = () => {
   // P0-1: Toast notifications for autosave and other async feedback
   const [toasts, addToast, dismissToast] = useToast();
 
+  const authState = useAuthStore();
+  const navigate = useNavigate();
+
   useEffect(() => {
-    const verifySession = async () => {
-      const token = api.auth.getToken(); // Use api.auth.getToken() to check main token
-      const temp2faToken = api.auth.getTemp2faToken(); // Check for temporary 2FA token
-
-      if (!token && !temp2faToken) {
-        setAuthChecked(true);
-        return;
-      }
-
+    // Check license status first
+    const checkLicense = async () => {
       try {
-        await api.get('/api/auth/me', { useTempToken: !!temp2faToken }); // Use temp token if available
-        setIsAuthenticated(true);
-        setCurrentScreen('dashboard');
-        // If there was a temp2faToken and /me succeeds, it means 2FA was already verified for this session
-        // and the main token would have been set by apiRequest.
+        const status = await api.get('/api/license/status');
+        setIsActivated(!!status.activated);
       } catch (err) {
-        console.error('Session verification failed:', err);
-        api.auth.clearToken(); // Clears both main and temp 2FA token
-        setIsAuthenticated(false);
-        setTwoFactorRequired(false);
+        // If the backend returns 404 Not Found, we are running in standard web/SaaS mode without license enforcement
+        if (err.status === 404) {
+          setIsActivated(true);
+        } else {
+          setIsActivated(false);
+        }
       } finally {
-        setAuthChecked(true);
+        setIsCheckingLicense(false);
       }
     };
-    verifySession();
+    checkLicense();
   }, []);
+
+  useEffect(() => {
+    setIsAuthenticated(authState.isAuthenticated);
+    setUserData(authState.user);
+    setAuthChecked(true);
+    if (authState.isAuthenticated) {
+      if (currentScreen === 'welcome') {
+        setCurrentScreen('dashboard');
+      }
+    }
+  }, [authState.isAuthenticated, authState.user, currentScreen]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -127,9 +142,19 @@ const App = () => {
   const [activeProfileId, setActiveProfileId] = useState(savedActiveProfileId || null);
 
   // Shared optimization result — single source of truth for all modules
-  const sharedOptimization = useMemo(() => {
-    const takt = calculateTaktTime(config);
-    return runOptimization(tasks, takt, 'LTF', config);
+  const [sharedOptimization, setSharedOptimization] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      const takt = await calculateTaktTime(config);
+      const targetCycleTime = Number(config?.variables?.find(v => v.key === 'target_cycle_time')?.value || takt);
+      const cycleTime = targetCycleTime > 0 ? targetCycleTime : takt;
+      const heuristic = config.heuristic || 'LTF';
+      const result = runOptimization(tasks, cycleTime, heuristic, config);
+      if (!cancelled) setSharedOptimization(result);
+    };
+    run();
+    return () => { cancelled = true; };
   }, [tasks, config]);
 
   // Persistence Effects
@@ -139,6 +164,39 @@ const App = () => {
     localStorage.setItem(STORAGE_KEYS.DARK_MODE, JSON.stringify(darkMode));
     document.body.classList.toggle('dark-mode', darkMode);
   }, [darkMode]);
+
+  // Zustand store synchronization
+  const setCurrentSimulationState = useEngineStore(state => state.setCurrentSimulationState);
+  useEffect(() => {
+    if (isAuthenticated && dataLoaded) {
+      setCurrentSimulationState({
+        tasks,
+        config,
+        optimization: sharedOptimization
+      });
+    }
+  }, [tasks, config, sharedOptimization, isAuthenticated, dataLoaded, setCurrentSimulationState]);
+
+  // Set baseline state when active profile or profile list is loaded/selected
+  const setBaselineState = useEngineStore(state => state.setBaselineState);
+  useEffect(() => {
+    if (isAuthenticated && dataLoaded && activeProfileId) {
+      const activeProfile = profiles.find(p => p.id === activeProfileId);
+      if (activeProfile) {
+        setBaselineState({
+          tasks: activeProfile.tasks,
+          config: activeProfile.config,
+          optimization: null
+        });
+      } else if (activeProfileId === oscilloscopeSampleProfile.id) {
+        setBaselineState({
+          tasks: oscilloscopeSampleProfile.tasks,
+          config: oscilloscopeSampleProfile.config,
+          optimization: null
+        });
+      }
+    }
+  }, [activeProfileId, profiles, isAuthenticated, dataLoaded, setBaselineState]);
 
   // Initial fetch for profiles
   useEffect(() => {
@@ -154,34 +212,7 @@ const App = () => {
     fetchProfiles();
   }, [isAuthenticated]);
 
-  const handleAuthSuccess = useCallback((response) => {
-    setAuthError('');
-    if (response?.two_factor_required) {
-      setTwoFactorRequired(true);
-      // Keep isAuthenticated as false until 2FA is verified
-    } else {
-      // P2-2: Caller now explicitly stores the main auth token
-      if (response?.access_token) {
-        api.auth.setToken(response.access_token);
-      }
-      setIsAuthenticated(true);
-      setCurrentScreen('dashboard');
-      setMaxStepReached(0);
-      setTwoFactorRequired(false);
-    }
-  }, []);
 
-  const handle2faSuccess = useCallback((response) => {
-    // P2-2: Caller stores token after successful 2FA verification
-    if (response?.access_token) {
-      api.auth.setToken(response.access_token);
-    }
-    setIsAuthenticated(true);
-    setCurrentScreen('dashboard');
-    setMaxStepReached(0);
-    setTwoFactorRequired(false);
-    api.auth.clearTemp2faToken(); // Clear temp token after successful 2FA
-  }, []);
 
   // Profile Handlers
   const saveProfile = useCallback(async (name) => {
@@ -210,6 +241,9 @@ const App = () => {
     }
   }, []);
 
+  const [syncStatus, setSyncStatus] = useState('saved');
+  const saveQueueRef = useRef(null);
+
   const handleSaveTasks = useCallback(async (nextTasks) => {
     try {
       const savedTasks = await api.put('/api/tasks', nextTasks);
@@ -222,6 +256,47 @@ const App = () => {
     }
   }, []);
 
+  // Initialize sequential queue for tasks autosave to prevent race conditions
+  if (!saveQueueRef.current) {
+    let inFlight = false;
+    let nextData = null;
+
+    const runSave = async (data) => {
+      inFlight = true;
+      setSyncStatus('saving');
+      try {
+        await handleSaveTasks(data);
+        setSyncStatus('saved');
+      } catch (err) {
+        console.error('Autosave failed:', err);
+        setSyncStatus('error');
+        addToast({ 
+          message: 'Autosave failed — your changes are saved locally but not synced to the server.', 
+          variant: 'warning', 
+          duration: 8000 
+        });
+      } finally {
+        inFlight = false;
+        if (nextData !== null) {
+          const dataToSave = nextData;
+          nextData = null;
+          runSave(dataToSave);
+        }
+      }
+    };
+
+    saveQueueRef.current = {
+      trigger: (data) => {
+        if (inFlight) {
+          nextData = data;
+          setSyncStatus('saving');
+        } else {
+          runSave(data);
+        }
+      }
+    };
+  }
+
   useEffect(() => {
     if (!isAuthenticated || !dataLoaded) return undefined;
 
@@ -230,15 +305,13 @@ const App = () => {
 
     if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
     autosaveTimerRef.current = setTimeout(() => {
-      handleSaveTasks(tasks).catch(() => {
-        addToast({ message: 'Autosave failed — your changes are saved locally but not synced to the server.', variant: 'warning', duration: 8000 });
-      });
+      saveQueueRef.current.trigger(tasks);
     }, 600);
 
     return () => {
       if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
     };
-  }, [tasks, isAuthenticated, dataLoaded, handleSaveTasks, addToast]);
+  }, [tasks, isAuthenticated, dataLoaded, addToast]);
 
   const loadProfile = useCallback(async (id) => {
     const profile = profiles.find(p => p.id === id);
@@ -301,21 +374,21 @@ const App = () => {
   const navigateTo = (screen) => {
     if (screen === currentScreen) return;
     const targetIdx = sidebarItems.findIndex(i => i.id === screen);
-    setIsMobileNavOpen(false);
     setCurrentScreen(screen);
     if (targetIdx > maxStepReached) setMaxStepReached(targetIdx);
   };
 
   const handleLogout = useCallback(() => {
-    api.auth.clearToken();
+    authState.logout();
     setIsAuthenticated(false);
+    setUserData(null);
     setCurrentScreen('welcome');
     setMaxStepReached(0);
-    setTwoFactorRequired(false);
     setDataLoaded(false);
     setTasks([]);
     setConfig({});
-  }, []);
+    navigate('/login');
+  }, [authState, navigate]);
 
   useEffect(() => {
     const handleUnauthorized = () => {
@@ -327,109 +400,68 @@ const App = () => {
     };
   }, [handleLogout]);
 
-  if (!authChecked) {
+  if (!authChecked || isCheckingLicense) {
     return <SplashScreen />;
   }
 
-  if (twoFactorRequired) {
-    return (
-      <div className="welcome-page">
-        <Suspense fallback={<SkeletonLoader />}>
-          <Welcome
-            onAuthSuccess={handleAuthSuccess}
-            authError={authError}
-            setAuthError={setAuthError}
-            twoFactorRequired={true}
-            on2faSuccess={handle2faSuccess}
-          />
-        </Suspense>
-      </div>
-    );
+  if (!isActivated) {
+    return <LicenseActivation onActivationSuccess={() => setIsActivated(true)} />;
   }
 
-  if (!isAuthenticated || currentScreen === 'welcome') {
-    return (
-      <div className="welcome-page">
-        <Suspense fallback={<SkeletonLoader />}>
-          <Welcome
-            onAuthSuccess={handleAuthSuccess}
-            authError={authError}
-            setAuthError={setAuthError}
-            twoFactorRequired={false}
-            on2faSuccess={handle2faSuccess} // This won't be used but passed for consistency
-          />
-        </Suspense>
-      </div>
-    );
-  }
+  // Derive active profile name
+  const activeProfileName = profiles.find(p => p.id === activeProfileId)?.name || (activeProfileId === oscilloscopeSampleProfile.id ? oscilloscopeSampleProfile.name : '');
 
   return (
-    <div className="app-shell" style={{ display: 'flex', minHeight: '100vh', backgroundColor: 'var(--bg-main)', color: 'var(--text-main)', transition: 'all 0.3s ease' }}>
-      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
-      <button
-        type="button"
-        className="mobile-nav-toggle no-print"
-        onClick={() => setIsMobileNavOpen(true)}
-        aria-label="Open navigation"
-        aria-expanded={isMobileNavOpen}
-      >
-        <Menu size={20} />
-      </button>
+    <Routes>
+      <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
+      <Route path="/*" element={
+        <ProtectedRoute>
+          <DashboardLayout
+            currentScreen={currentScreen}
+            navigateTo={navigateTo}
+            sidebarItems={sidebarItems}
+            maxStepReached={maxStepReached}
+            darkMode={darkMode}
+            setDarkMode={setDarkMode}
+            onLogout={handleLogout}
+            onOpenSettings={() => setIsSettingsOpen(true)}
+            activeProfileName={activeProfileName}
+            user={userData}
+          >
+            <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
-      {isMobileNavOpen && (
-        <button
-          type="button"
-          className="sidebar-scrim no-print"
-          aria-label="Close navigation"
-          onClick={() => setIsMobileNavOpen(false)}
-        />
-      )}
-
-      <Sidebar
-        sidebarItems={sidebarItems}
-        currentScreen={currentScreen}
-        maxStepReached={maxStepReached}
-        navigateTo={navigateTo}
-        darkMode={darkMode}
-        setDarkMode={setDarkMode}
-        isMobileOpen={isMobileNavOpen}
-        onCloseMobile={() => setIsMobileNavOpen(false)}
-        onLogout={handleLogout}
-        onOpenSettings={() => setIsSettingsOpen(true)}
-      />
-
-      {isSettingsOpen && (
-        <SettingsLayout
-          onClose={() => setIsSettingsOpen(false)}
-          onLogout={handleLogout}
-        />
-      )}
-
-      <main className="app-main" style={{ flex: 1, padding: '1.5rem', maxHeight: '100vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-
-        <div className="app-content-card" style={{ background: 'var(--card-bg)', borderRadius: '16px', flex: 1, boxShadow: '0 20px 50px rgba(0,0,0,0.05)', border: '1px solid var(--border-color)', position: 'relative', overflow: 'hidden', transition: 'all 0.3s ease' }}>
-          <AnimatePresence mode="wait">
-            {isLoading ? (
-              <motion.div key="loader" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ width: '100%', height: '100%' }}><SkeletonLoader /></motion.div>
-            ) : (
-              <motion.div className="screen-motion-wrapper" key={currentScreen} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.3 }} style={{ width: '100%', height: '100%' }}>
-                <ErrorBoundary key={`eb-${currentScreen}`}>
-                <Suspense fallback={<SkeletonLoader />}>
-                  {currentScreen === 'dashboard' && <Dashboard tasks={tasks} config={config} setConfig={handleSaveConfig} onNavigate={navigateTo} profiles={profiles} activeProfileId={activeProfileId} onSaveProfile={saveProfile} onLoadProfile={loadProfile} onLoadSampleProfile={loadSampleProfile} onDeleteProfile={deleteProfile} optimization={sharedOptimization} />}
-                  {currentScreen === 'planning' && <ProcessPlanning tasks={tasks} setTasks={setTasks} onSaveTasks={handleSaveTasks} config={config} onNavigate={navigateTo} optimization={sharedOptimization} />}
-                  {currentScreen === 'network' && <PrecedenceNetwork tasks={tasks} onNavigate={navigateTo} />}
-                  {currentScreen === 'conceptual' && <ConceptualLayout tasks={tasks} config={config} optimization={sharedOptimization} onNavigate={navigateTo} />}
-                  {currentScreen === 'optimization' && <LineOptimization tasks={tasks} config={config} setConfig={handleSaveConfig} optimization={sharedOptimization} />}
-                  {currentScreen === 'floor' && <FloorLayout tasks={tasks} config={config} onNavigate={navigateTo} optimization={sharedOptimization} />}
-                  {currentScreen === 'financials' && <FinancialAnalytics tasks={tasks} config={config} optimization={sharedOptimization} />}
-                </Suspense>
-                </ErrorBoundary>
-              </motion.div>
+            {isSettingsOpen && (
+              <SettingsModal
+                onClose={() => setIsSettingsOpen(false)}
+                onLogout={handleLogout}
+                onUpdateUser={setUserData}
+              />
             )}
-          </AnimatePresence>
-        </div>
-      </main>
-    </div>
+
+            <AnimatePresence mode="wait">
+              {isLoading ? (
+                <motion.div key="loader" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ width: '100%', height: '100%' }}><SkeletonLoader /></motion.div>
+              ) : (
+                <motion.div className="screen-motion-wrapper" key={currentScreen} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.3 }} style={{ width: '100%', height: '100%' }}>
+                  <ErrorBoundary key={`eb-${currentScreen}`}>
+                  <Suspense fallback={<SkeletonLoader />}>
+                    {currentScreen === 'dashboard' && <Dashboard tasks={tasks} config={config} setConfig={handleSaveConfig} onNavigate={navigateTo} profiles={profiles} activeProfileId={activeProfileId} onSaveProfile={saveProfile} onLoadProfile={loadProfile} onLoadSampleProfile={loadSampleProfile} onDeleteProfile={deleteProfile} optimization={sharedOptimization} />}
+                    {currentScreen === 'planning' && <ProcessPlanning tasks={tasks} setTasks={setTasks} onSaveTasks={handleSaveTasks} config={config} onNavigate={navigateTo} optimization={sharedOptimization} syncStatus={syncStatus} />}
+                    {currentScreen === 'network' && <PrecedenceNetwork tasks={tasks} onNavigate={navigateTo} />}
+                    {currentScreen === 'conceptual' && <ConceptualLayout tasks={tasks} config={config} optimization={sharedOptimization} onNavigate={navigateTo} />}
+                    {currentScreen === 'optimization' && <LineOptimization tasks={tasks} config={config} setConfig={handleSaveConfig} optimization={sharedOptimization} />}
+                    {currentScreen === 'floor' && <FloorLayout tasks={tasks} config={config} onNavigate={navigateTo} optimization={sharedOptimization} />}
+                    {currentScreen === 'financials' && <FinancialAnalytics tasks={tasks} config={config} optimization={sharedOptimization} />}
+                  </Suspense>
+                  </ErrorBoundary>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </DashboardLayout>
+        </ProtectedRoute>
+      } />
+    </Routes>
   );
 };
 

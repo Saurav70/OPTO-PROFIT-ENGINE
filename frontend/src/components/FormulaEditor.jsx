@@ -34,7 +34,15 @@ const FormulaEditor = ({ formula, variables, onSave, onCancel, title = "Formula 
 
   const currentFormula = isTextMode ? textFormula : blocks.map(b => b.value).join(' ');
   const context = buildContext(variables);
-  const previewResult = evaluateFormula(currentFormula, context);
+
+  const [previewResult, setPreviewResult] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    evaluateFormula(currentFormula, context).then(r => {
+      if (!cancelled) setPreviewResult(r);
+    });
+    return () => { cancelled = true; };
+  }, [currentFormula, context]);
 
   const addBlock = (val) => {
     setBlocks([...blocks, { id: `block-${idCounter.current++}`, value: val }]);

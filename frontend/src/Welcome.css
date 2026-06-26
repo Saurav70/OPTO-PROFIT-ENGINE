@@ -295,3 +295,62 @@
     padding: 2.5rem !important;
   }
 }
+
+@media (max-width: 480px) {
+  .welcome-auth-card {
+    padding: 1.5rem !important;
+    border-radius: 12px;
+  }
+
+  .auth-header {
+    margin-bottom: 1.5rem;
+  }
+
+  .auth-title {
+    font-size: 1.2rem;
+  }
+
+  .auth-subtitle {
+    font-size: 0.72rem;
+  }
+
+  .auth-form-group {
+    gap: 1rem;
+  }
+
+  .two-factor-input {
+    font-size: 1.4rem;
+    letter-spacing: 0.5rem;
+    padding-left: 0.75rem;
+  }
+
+  .two-factor-input:focus {
+    letter-spacing: 0.6rem;
+  }
+
+  .two-factor-icon-wrapper {
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+    margin-bottom: 1rem;
+  }
+
+  .brand-badge {
+    width: 28px;
+    height: 28px;
+  }
+
+  .input-label {
+    font-size: 0.65rem;
+    letter-spacing: 1px;
+    margin-bottom: 0.35rem;
+  }
+
+  .input-field {
+    padding: 0.75rem 0.85rem;
+  }
+
+  .welcome-auth-panel {
+    padding: 0.75rem;
+  }
+}

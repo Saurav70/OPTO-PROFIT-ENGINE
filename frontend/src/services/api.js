@@ -1,4 +1,6 @@
-const DEFAULT_TIMEOUT_MS = 15000;
+import { useAuthStore } from '../store/useAuthStore';
+
+const DEFAULT_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS) || 60000;
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 const AUTH_TOKEN_KEY = 'opto_auth_token';
 const TEMP_2FA_TOKEN_KEY = 'opto_2fa_temp_token'; // New key for temporary 2FA token
@@ -104,7 +106,7 @@ export async function apiRequest(endpoint, options = {}) {
   if (useTempToken) {
     tokenToUse = localStorage.getItem(TEMP_2FA_TOKEN_KEY);
   } else {
-    tokenToUse = localStorage.getItem(AUTH_TOKEN_KEY);
+    tokenToUse = useAuthStore.getState().token || localStorage.getItem(AUTH_TOKEN_KEY);
   }
 
   if (tokenToUse && !requestHeaders.has('Authorization')) {
@@ -129,6 +131,7 @@ export async function apiRequest(endpoint, options = {}) {
       headers: requestHeaders,
       body: hasBody ? finalBody : undefined,
       signal: timedSignal,
+      credentials: 'include',
       ...rest
     });
 
@@ -169,12 +172,13 @@ export const api = {
   auth: {
     tokenKey: AUTH_TOKEN_KEY,
     setToken: (token) => {
-      // This function might need to be re-evaluated or removed if all token setting logic moves to apiRequest
+      useAuthStore.setState({ token, isAuthenticated: !!token });
       localStorage.setItem(AUTH_TOKEN_KEY, token);
       localStorage.removeItem(TEMP_2FA_TOKEN_KEY);
     },
-    getToken: () => localStorage.getItem(AUTH_TOKEN_KEY),
+    getToken: () => useAuthStore.getState().token || localStorage.getItem(AUTH_TOKEN_KEY),
     clearToken: () => {
+      useAuthStore.setState({ token: null, isAuthenticated: false, user: null });
       localStorage.removeItem(AUTH_TOKEN_KEY);
       localStorage.removeItem(TEMP_2FA_TOKEN_KEY);
     },

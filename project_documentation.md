@@ -1,390 +1,1061 @@
-# OPTO-PROFIT: Comprehensive Project Documentation & Lifecycle Manual
+# OPTO-PROFIT — Project Documentation
 
-OPTO-PROFIT is a specialized, industrial-grade full-stack toolkit engineered for industrial planners, manufacturing operations, and systems engineers. It enables precise, data-driven optimization of assembly lines, visual spatial plant floor layouts, dynamic operational formula calculations, and detailed financial return-on-investment (ROI) analysis.
-
-This document serves as the absolute authority on the OPTO-PROFIT software lifecycle, tracing the system's development from inception to continuous deployment and maintenance.
-
----
-
-```mermaid
-graph TD
-    A[1. Information Gathering] --> B[2. Planning & Sitemap]
-    B --> C[3. Design System]
-    C --> D[4. Content & Data Discipline]
-    D --> E[5. Coding & Architecture]
-    E --> F[6. Testing & Deployment]
-    F --> G[7. Maintenance & Security]
-```
+> **Version:** 1.0.0  
+> **Last Updated:** June 2025  
+> **Classification:** Internal Engineering Reference
 
 ---
 
-## 1. Information Gathering
+## Table of Contents
 
-Understanding the software's underlying purpose, targeted users, and competitive landscape is essential to building a high-value tool that answers real-world operational challenges.
-
-### 1.1 Purpose & Core Problem Solved
-In manufacturing, balancing assembly line processes (assigning tasks to sequential workstations) to maximize throughput and minimize idle time is an extremely complex optimization challenge (historically NP-hard). Planners have traditionally relied on fragile, fragmented spreadsheets or extremely expensive, heavy 3D plant-simulation packages. 
-
-OPTO-PROFIT fills this gap by offering a specialized, lightweight, premium web interface that:
-- Solves the Assembly Line Balancing Problem (ALBP) using multiple heuristics.
-- Connects operational cycle times directly to financial ROI metrics.
-- Provides interactive, spatial drag-and-drop floor layout planning.
-- Gives operations teams a collaborative, real-time tool with secure profile and session management.
-
-### 1.2 Target Audience
-OPTO-PROFIT is designed specifically for professionals in high-throughput manufacturing, assembly-heavy environments, and industrial planning:
-*   **Industrial & Process Engineers**: Need to define tasks, specify predecessor networks, analyze bottlenecks, and execute standard line balancing.
-*   **Operations & Plant Managers**: Need to visualize the floor layout, configure shifts, set takt times, and ensure smooth line handoffs.
-*   **Manufacturing Directors & CFOs**: Need clear, data-backed ROI charts, payback periods, and production rate comparisons to approve line re-designs or equipment investments.
-
-### 1.3 Competitors & The OPTO-PROFIT Advantage
-*   **Standard Spreadsheets (Excel/Google Sheets)**:
-    *   *Competitor Weakness*: No visual DAG precedence trees, no automated line balancing algorithms, and poor interactive UI.
-    *   *OPTO-PROFIT Advantage*: Native execution of Ranked Positional Weight (RPW), Largest Task Follower (LTF), and Most Following Tasks (MFT) algorithms. Fully responsive precedence graphs and layouts.
-*   **Legacy Simulation Suites (e.g., Siemens Tecnomatix, FlexSim, Arena)**:
-    *   *Competitor Weakness*: Steep learning curves, high licensing fees, heavy system requirements, and complex setups.
-    *   *OPTO-PROFIT Advantage*: Zero-install modern web app with an extremely premium, sleek dark UI, real-time collaboration, and direct financial coupling.
-*   **Generic Project/Task Tools (e.g., Jira, Trello, Asana)**:
-    *   *Competitor Weakness*: No manufacturing logic, no cycle time math, and no spatial/layout awareness.
-    *   *OPTO-PROFIT Advantage*: Structured specifically for Industrial Engineering (IE) concepts like takt time, balance delay, and smoothness indices.
+1. [Project Specifications](#1-project-specifications)
+2. [System Architecture](#2-system-architecture)
+3. [Business Logic & Industrial Engineering](#3-business-logic--industrial-engineering)
+4. [API Reference](#4-api-reference)
+5. [Database Schema](#5-database-schema)
+6. [Security Architecture](#6-security-architecture)
+7. [User Manual](#7-user-manual)
+8. [Deployment & Operations](#8-deployment--operations)
+9. [CI/CD Pipeline](#9-cicd-pipeline)
+10. [Desktop Application](#10-desktop-application)
 
 ---
 
-## 2. Planning: Architecture & Sitemap
+## 1. Project Specifications
 
-OPTO-PROFIT is structured around a linear, logical workflow that guides the industrial engineer from initial data definition to spatial planning and financial validation.
+### 1.1 Overview
 
-### 2.1 Web Application Sitemap & User Flows
+**OPTO-PROFIT** (Optimization-Profit Engine) is a full-stack industrial engineering toolkit designed for assembly line optimization, floor-layout planning, and financial ROI analysis. The system enables industrial engineers to model production lines, apply constraint-aware heuristic balancing algorithms, and quantify the financial impact of optimization decisions.
 
-```mermaid
-graph TD
-    subgraph Auth Flow
-        A[Login / Register] -->|2FA Verification| B[Secure User Session]
-    end
+The application is built as a web-first SPA (Single Page Application) with an optional native desktop wrapper for standalone deployment.
 
-    subgraph OPTO-PROFIT Dashboard Shell
-        B --> C[300px Dark Left Sidebar]
-        C --> D[Dashboard Module]
-        C --> E[Process Planning Module]
-        C --> F[Precedence Network Module]
-        C --> G[Conceptual Layout Module]
-        C --> H[Line Optimization Module]
-        C --> I[Floor Layout Module]
-        C --> J[Financial Analytics Module]
-    end
+### 1.2 Key Features
 
-    D -->|Quick Overview| K[KPI Cards: Active Tasks, Balance Efficiency, Bottlenecks]
-    E -->|Core Data CRUD| L[Task Manager: Names, Times, Predecessors, Exclusions]
-    F -->|Visual Graph| M[Directed Acyclic Precedence Graph & Critical Path]
-    G -->|Linear Routing| N[Station Assignment Blocks & Idle Times]
-    H -->|Heuristic Engine| O[Algorithm Selectors: RPW, LTF, MFT & Efficiency Metrics]
-    I -->|Spatial Designer| P[Zoomable Grid Layout: Straight, U-Shape, Scatter Configurations]
-    J -->|ROI Calculator| Q[SVG Performance Charts, Savings Breakdowns, Payback Matrices]
-```
+| Feature | Description |
+|---|---|
+| **Process Planning** | Define assembly tasks with time, predecessors, zoning, and custom attributes |
+| **Line Optimization** | Run heuristic balancing (LTF, MFT, RPW) with constraint-aware station assignment |
+| **Dashboard** | Real-time KPI monitoring: Takt Time, Efficiency, Balance Delay, Smoothness Index |
+| **Financial Analytics** | ROI calculation, baseline vs. optimized profit comparison, payback period analysis |
+| **Precedence Network** | Visual DAG (Directed Acyclic Graph) of task dependencies using React Flow |
+| **Floor Layout** | Interactive drag-and-drop workstation layout designer |
+| **Formula Engine** | User-definable variables and formulas with safe AST-based evaluation |
+| **Profiles & Snapshots** | Save/load complete project states (tasks + config) for scenario comparison |
+| **Real-time Collaboration** | WebSocket-based multi-user editing within tenant rooms |
+| **Executive Reports** | One-click PDF generation with KPI comparison tables and layout captures |
+| **Two-Factor Authentication** | TOTP-based 2FA with QR code setup via authenticator apps |
+| **Multi-Tenancy** | Tenant-scoped data isolation for organization-level workspaces |
 
-### 2.2 Functional Module Definitions
-1.  **Authentication & Security**: Handles JWT-based secure sessions, Multi-Factor Authentication (TOTP 2FA via authenticator apps), and user-specific profiles.
-2.  **Dashboard**: Combines system statistics, active formula indicators, user profile quick-switches, and live system logs.
-3.  **Process Planning**: Represents the "Task Input Ledger." Users define tasks, durations, and precedence constraints.
-4.  **Precedence Network**: Renders task relationships dynamically as a Directed Acyclic Graph (DAG), highlighting the critical path and the bottleneck task.
-5.  **Conceptual Layout**: Highlights task groupings into generic workstations before physical mapping occurs.
-6.  **Line Optimization**: The operational engine where users input a target Takt Time (or target efficiency) and choose a heuristic algorithm to assign tasks to workstations.
-7.  **Floor Layout**: A spatial CAD-like canvas allowing dynamic U-Shape, Straight Line, or Scattered layout planning on a customizable grid.
-8.  **Financial Analytics**: An executive portal showing real savings from productivity gains, amortized capital investments, and equipment ROI.
+### 1.3 Technology Stack
 
----
+#### Frontend
 
-## 3. Design: Industrial Aesthetic & Design System
+| Technology | Role | Version |
+|---|---|---|
+| **React** | UI framework | 19.x |
+| **Vite** | Build tool & dev server | 5.x |
+| **Framer Motion** | Animations & transitions | 12.x |
+| **Recharts** | Data visualization charts | 3.x |
+| **React Flow** (`@xyflow/react`) | Node-based graph editor | 12.x |
+| **Lucide React** | Icon library | 1.x |
+| **Zustand** | Lightweight state management | 5.x |
+| **React Router** | Client-side routing | 7.x |
+| **mathjs** | Safe formula evaluation (lazy-loaded) | 15.x |
+| **jsPDF / jspdf-autotable** | PDF report generation | 4.x / 5.x |
+| **html2canvas** | DOM-to-image capture for reports | 1.x |
+| **Axios** | HTTP client (auth store) | 1.x |
 
-The visual identity of OPTO-PROFIT is designed to convey high density, precision, and modern premium engineering. It adheres strictly to the "Industrial Engineering Toolkit" aesthetic.
+#### Backend
 
-### 3.1 Core Color Palette & Design Tokens
+| Technology | Role | Version |
+|---|---|---|
+| **FastAPI** | Async Python web framework | ≥0.111 |
+| **Uvicorn** | ASGI server | ≥0.30 |
+| **SQLAlchemy** | ORM (Object-Relational Mapper) | ≥2.0 |
+| **SQLite** | Embedded relational database | (stdlib) |
+| **Pydantic v2** | Request/response validation | ≥2.7 |
+| **python-jose** | JWT token signing & verification | ≥3.3 |
+| **bcrypt** | Password hashing | via passlib |
+| **pyotp** | TOTP two-factor authentication | ≥2.9 |
+| **slowapi** | Rate limiting (Redis-free) | ≥0.1.9 |
+| **python-dotenv** | Environment variable loading | ≥1.0 |
 
-| Token Name | Color Hex | Color Sample | Primary Usage |
-| :--- | :--- | :--- | :--- |
-| **Dark Slate** | `#0f172a` | `■` | Left Sidebar, modal backdrops, primary background grids |
-| **Teal Accent** | `#0d9488` | `■` | Primary interaction, hover highlights, active tab lines |
-| **Purple Secondary**| `#a855f7` | `■` | ROI indicators, statistics markers, optimal state displays |
-| **Amber Warning** | `#f59e0b` | `■` | Bottleneck alerts, idle state alerts, predecessor mismatch warnings |
-| **Danger Red** | `#ef4444` | `■` | System deletes, invalid formula configurations, login errors |
-| **App Shell Base** | `#f1f5f9` | `■` | Main content backdrop (Slate-100) |
-| **Surface Card** | `#f8fafc` | `■` | Nested interactive cards (Slate-50) |
+#### Desktop
 
-### 3.2 Visual Specifications
-*   **Typography**: The primary typeface is **Inter** from Google Fonts. 
-    *   *Title & Labels Header Style*: Uppercase with bold letter-spacing (`letter-spacing: 2px`, font weight: `900`).
-    *   *Numeric Data*: Monospace number styling is used for layout coordinates and ROI metrics to ensure high readability.
-*   **Container Borders & Shadows**:
-    *   **Border Radius (`radius-lg`)**: `16px` for all modules, modal containers, and dashboard cards.
-    *   **Shadow Glow (`shadow-glow`)**: A specialized, radiant blue shadow `0 8px 30px rgba(14, 165, 233, 0.15)` is applied to active and hover states.
-*   **Glassmorphism**: Secondary menus and detail drawers use `backdrop-filter: blur(12px)` to maintain high spatial context.
-*   **Micro-Animations**: Uses **Framer Motion** (`framer-motion`) with a standardized smooth transition cubic bezier curve:
-    ```javascript
-    const transitionSmooth = { duration: 0.4, ease: [0.16, 1, 0.3, 1] };
-    ```
-*   **Icons**: Standardized on the high-fidelity **Lucide-React** library to represent industrial controls (e.g., `Wrench`, `Layers`, `Settings`, `DollarSign`, `Activity`).
+| Technology | Role |
+|---|---|
+| **PyInstaller** | Bundle into standalone `.exe` |
+| **pywebview** | Native OS WebView window |
 
----
+#### DevOps
 
-## 4. Content Creation: Real Client Data & Formulas
+| Technology | Role |
+|---|---|
+| **Docker / Docker Compose** | Containerized deployment |
+| **GitHub Actions** | CI/CD pipelines |
+| **ESLint** | Frontend linting |
 
-OPTO-PROFIT contains zero placeholders. All inputs represent real manufacturing metrics, operational variables, and authentic mathematical formulas.
+### 1.4 System Requirements
 
-### 4.1 Real Client Operational Datasets
-The default workspace is loaded with actual industrial assembly data (e.g., standard automotive bracket sub-assembly, electronic board population, or pump assembly):
-
-| Task ID | Task Description | Time (seconds) | Predecessors | Zoning Exclusions |
-| :---: | :--- | :---: | :---: | :---: |
-| **A** | Frame Placement | 45 | None | None |
-| **B** | Harness Installation | 30 | A | Z |
-| **C** | PCB Alignment | 55 | B | None |
-| **D** | Main Fastening | 40 | B | None |
-| **E** | Optical Calibration | 60 | C, D | None |
-| **F** | Quality Inspections | 25 | E | B |
-
-### 4.2 Configurable System Variables
-
-*   `shift_time`: Default `28800` seconds (8-hour shift).
-*   `demand`: Default `400` units per shift.
-*   `labor_rate`: Default `$25.00` per hour.
-*   `equipment_cost`: Default `$15,000.00` for automated stations.
-*   `target_efficiency`: Default `85%` for balancing optimization.
-
-### 4.3 Client Formula Ledger
-Advanced users can dynamically overwrite mathematical engines. The formula engine processes these real client-defined formulas:
-
-> [!NOTE]
-> *   **Takt Time**: `shift_time / demand` (Outputs target time per station).
-> *   **Production Rate per Hour**: `3600 / cycle_time` (Calculates hourly throughput).
-> *   **Required Workstations**: `ceil(sum(task_times) / takt_time)`.
-> *   **ROI Return**: `(labor_savings_annual + cycle_time_savings) / equipment_cost`.
+| Component | Minimum | Recommended |
+|---|---|---|
+| **Node.js** | 18.x | 20.x LTS |
+| **Python** | 3.10 | 3.12 |
+| **RAM** | 2 GB | 4 GB |
+| **Disk** | 500 MB | 1 GB |
+| **Browser** | Chrome 90+, Firefox 90+, Edge 90+ | Latest |
 
 ---
 
-## 5. Coding: Full-Stack Architecture & Engines
+## 2. System Architecture
 
-OPTO-PROFIT is built on a modern, decoupled web architecture that pairs an incredibly responsive frontend with a secure, highly performance-tuned backend.
+### 2.1 High-Level Architecture
 
 ```
- s:\OPTO-PROFIT
- ├── backend/                   # FastAPI Backend
- │   ├── app/
- │   │   ├── routers/
- │   │   │   ├── auth.py         # JWT Session & 2FA Auth Routes
- │   │   │   ├── data.py         # Tasks, Configurations, & Profile CRUD
- │   │   │   └── analytics.py    # Analytical Aggregators & Formula Engines
- │   │   ├── auth.py             # Auth & Session Guards
- │   │   ├── models.py           # Pydantic v2 Schema Rules
- │   │   └── main.py             # FastAPI App Entrypoint
- └── frontend/                  # React Frontend (Vite)
-     ├── src/
-     │   ├── components/        # Dashboard, ProcessPlanning, FloorLayout, etc.
-     │   ├── services/
-     │   │   └── api.js          # Unified Axios Client Wrapper
-     │   ├── utils/
-     │   │   ├── optimizer.js    # Line Balancing Heuristics, CP, & ROI calcs
-     │   │   ├── formulaEngine.js# Dynamic Mathematical Evaluation Engine
-     │   │   └── haptics.js      # Premium UI Micro-interactions
-     │   └── index.css          # Core Styling Variables & Design Tokens
+┌──────────────────────────────────────────────────────────────────┐
+│                        CLIENT LAYER                              │
+│  ┌────────────────────────────────────────────────────────────┐  │
+│  │              React SPA (Vite Dev / Nginx Prod)             │  │
+│  │                                                            │  │
+│  │  ┌──────────┐  ┌──────────────┐  ┌────────────────────┐   │  │
+│  │  │ Zustand   │  │ React Router │  │  Framer Motion     │   │  │
+│  │  │ Auth +    │  │ /login       │  │  Page transitions  │   │  │
+│  │  │ Engine    │  │ /register    │  │  & micro-anims     │   │  │
+│  │  │ Stores    │  │ /app/*       │  │                    │   │  │
+│  │  └──────────┘  └──────────────┘  └────────────────────┘   │  │
+│  │                                                            │  │
+│  │  ┌──────────────────────────────────────────────────────┐  │  │
+│  │  │               Component Modules                      │  │  │
+│  │  │  Dashboard │ ProcessPlanning │ LineOptimization       │  │  │
+│  │  │  FloorLayout │ FinancialAnalytics │ PrecedenceNetwork│  │  │
+│  │  │  Settings │ FormulaEditor │ Collaboration            │  │  │
+│  │  └──────────────────────────────────────────────────────┘  │  │
+│  │                                                            │  │
+│  │  ┌───────────────────┐  ┌───────────────────────────────┐  │  │
+│  │  │  API Service       │  │  Optimizer Engine (frontend)  │  │  │
+│  │  │  (fetch + Bearer)  │  │  Line Balancing, Critical     │  │  │
+│  │  │  + HttpOnly Cookie │  │  Path, Takt Sweep, ROI        │  │  │
+│  │  └───────────────────┘  └───────────────────────────────┘  │  │
+│  └────────────────────────────────────────────────────────────┘  │
+│                              │  HTTP / WS                        │
+└──────────────────────────────┼───────────────────────────────────┘
+                               │
+┌──────────────────────────────┼───────────────────────────────────┐
+│                        SERVER LAYER                              │
+│  ┌────────────────────────────────────────────────────────────┐  │
+│  │              FastAPI Application (Uvicorn ASGI)            │  │
+│  │                                                            │  │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌─────────────────┐  │  │
+│  │  │ Auth Module   │  │  Middleware   │  │  Rate Limiter   │  │  │
+│  │  │ JWT + bcrypt  │  │  CORS         │  │  slowapi         │  │  │
+│  │  │ 2FA (pyotp)  │  │  CSP Headers  │  │  3-5 req/min    │  │  │
+│  │  │ Lockout      │  │  X-Frame-Opts │  │                 │  │  │
+│  │  └──────────────┘  └──────────────┘  └─────────────────┘  │  │
+│  │                                                            │  │
+│  │  ┌──────────────────────────────────────────────────────┐  │  │
+│  │  │                    Routers                           │  │  │
+│  │  │  /api/auth/*   │  /api/tasks   │  /api/config        │  │  │
+│  │  │  /api/profiles │  /api/analytics/roi                 │  │  │
+│  │  │  /api/ws/{room_id}  │  /api/status                   │  │  │
+│  │  └──────────────────────────────────────────────────────┘  │  │
+│  │                                                            │  │
+│  │  ┌──────────────┐  ┌──────────────────────────────────┐   │  │
+│  │  │ Math Engine   │  │  Email Service (SMTP)            │   │  │
+│  │  │ takt_time()   │  │  Password reset emails           │   │  │
+│  │  │ balance_idx() │  │  Simulation mode fallback         │   │  │
+│  │  └──────────────┘  └──────────────────────────────────┘   │  │
+│  └────────────────────────────────────────────────────────────┘  │
+│                              │  SQLAlchemy ORM                   │
+│  ┌────────────────────────────────────────────────────────────┐  │
+│  │               SQLite Database (optoprofit.db)              │  │
+│  │  users │ sessions │ tasks │ config │ profiles │ pw_resets  │  │
+│  └────────────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
-### 5.1 Technology Stack Selection
-*   **Front-End Stack**:
-    *   **Vite + React**: Extremely fast hot-reloads and low build overhead.
-    *   **Framer Motion**: Orchestrates visual states and transitions of workstations on the factory floor canvas.
-    *   **Lucide React**: Clean, lightweight icons for manufacturing controls.
-    *   **Math.js**: Local parsing and tokenization of advanced mathematical formulas.
-*   **Back-End Stack**:
-    *   **FastAPI**: Highly performant, async Python framework that auto-generates interactive OpenAPI documentation.
-    *   **Motor (Async MongoDB)**: Direct non-blocking communication to the database to ensure rapid task saves without freezing event loops.
-    *   **Slowapi**: Token-bucket based rate limiting to prevent denial of service.
-    *   **PyOTP**: Secure generation and verification of TOTP seeds for 2FA.
-
-### 5.2 Core Optimization Engine (`optimizer.js`)
-At the core of OPTO-PROFIT is a modular optimization library written in clean ES6 Javascript:
-1.  **Line Balancing Heuristics**:
-    *   *Ranked Positional Weight (RPW)*: Assigns tasks with the highest weight (its time plus time of all descendants) to the first available workstation.
-    *   *Largest Task Follower (LTF)*: Prioritizes tasks that have a high number of subsequent operations.
-    *   *Most Following Tasks (MFT)*: Prioritizes tasks based on the size of their dependent tree.
-2.  **Critical Path Method (CPM)**:
-    *   Implements forward and backward pass passes to calculate early start (ES), late start (LS), and float times for every task, identifying exact structural bottlenecks.
-3.  **Visual Exclusions**:
-    *   Tracks zoning tags (e.g., "Cannot assign Task B and Task Z to the same workstation due to chemical hazards").
-
----
-
-## 6. Testing & Launch
-
-Quality assurance, security validations, and automated integration checks ensure the software runs flawlessly under production workloads.
-
-### 6.1 Unified Testing Infrastructure
-The pipeline ensures that bugs, security oversights, and layout issues are trapped before going live.
-
-```mermaid
-sequenceDiagram
-    participant Dev as Developer
-    participant CI as GitHub Actions CI
-    participant CD as Docker Registry (GHCR)
-    participant Prod as Production Server
-
-    Dev->>CI: Push to main
-    activate CI
-    Note over CI: Runs ESLint & Prettier
-    Note over CI: Executes Vitest UI Suite
-    Note over CI: Performs Pytest (Async API tests)
-    CI-->>Dev: Green Checkmark
-    deactivate CI
-
-    Dev->>CD: Dispatch Release Trigger
-    activate CD
-    Note over CD: Builds Docker Images
-    Note over CD: Pushes to ghcr.io
-    CD-->>Prod: Trigger Blue-Green Deployment
-    deactivate CD
-```
-
-### 6.2 Browser & Device Compatibility
-*   **Grid layout & Canvas dragging**: Grid systems are verified to run seamlessly on Chrome (88+), Safari (14+), Firefox (84+), and Edge.
-*   **Framer Motion Hardware Acceleration**: Fallbacks are integrated to use standard CSS transitions if GPU-accelerated Framer Motion actions are constrained on older mobile chipsets.
-*   **Responsive Breakpoints**: Evaluated extensively down to tablet resolutions to enable on-floor auditing via manufacturing-grade tablets.
-
-### 6.3 Secure Authentication Launch Protocols
-*   **2FA Token Lifetimes**: Temporary sessions generated during the login-verification cycle are explicitly deleted from the session vault immediately after the permanent session token is verified.
-*   **Strict CORS Policy**: Configured to restrict backend API calls to explicitly allowed domains, mitigating cross-site scripting vulnerabilities.
-
----
-
-## 7. Maintenance & Security
-
-Post-launch engineering procedures are established to preserve software longevity, maintain data integrity, and guarantee continuous operational uptime.
-
-### 7.1 Data Integrity & Autosave Engineering
-OPTO-PROFIT features a **dual-layer hydration and synchronization model**:
-
-> [!TIP]
-> *   **Local Hydration**: The React application reads cached state (`STORAGE_KEYS.TASKS` and `STORAGE_KEYS.CONFIG`) from `localStorage` instantly on initial page load. This ensures the app is operational even in weak network coverage zones on the factory floor.
-> *   **Debounced Cloud Synchronization**: Edits trigger a 500ms debounced auto-sync to the MongoDB backend. If the API returns a network failure, the state remains locally cached, and a prominent UI warning toast alerts the engineer of offline status.
-
-### 7.2 Security Auditing & Operations
-*   **Rate Limiting**: Configured to block malicious brute-force attempts on sensitive endpoints (e.g., login, password resets) at `5 requests per minute` per IP.
-*   **Password Cryptography**: Passwords are secure-hashed using salted PBKDF2-HMAC-SHA256, blocking potential offline rainbow table exposures.
-*   **Token Refresh & TTL**: Active session keys auto-expire after 7 days, necessitating a security re-authorization.
-
-### 7.3 Operational Logging & Monitoring
-*   **Production Error Boundaries**: High-level React Error Boundaries prevent application crashes. In production mode, detailed stack traces are safely sanitized and piped to remote diagnostic services, displaying a professional, customized "Recovery Alert" interface to the end user.
-*   **Uptime Probes**: Dedicated `/api/status` endpoint provides real-time database connectivity verification and container health reports.
-
----
-
-## 8. Deployment: Hosting, Domains & Environment Strategy
-
-Deploying the **OPTO-PROFIT** industrial engineering suite requires a robust, secure, and performant hosting architecture that decouples frontend client delivery from secure backend database transactions.
+### 2.2 Data Flow
 
 ```
-                           ┌────────────────────────────┐
-                           │   Vercel Global CDN Edge   │
-                           │   Static React Frontend    │
-                           └──────────────┬─────────────┘
-                                          │
-                                          │ HTTPS (Let's Encrypt SSL)
-                                          │ Requests API Data
-                                          ▼
-┌────────────────────────┐  TLS Connection  ┌────────────────────────────┐
-│  MongoDB Atlas Cluster  │◄────────────────┤ Backend Container Service  │
-│  Production DB Tier    │  (Port 27017)   │ (AWS ECS / Render / DO)    │
-└────────────────────────┘                  └────────────────────────────┘
+User Interaction
+       │
+       ▼
+┌──────────────┐     ┌──────────────┐     ┌──────────────────────┐
+│  React UI    │────▶│  API Service │────▶│  FastAPI Endpoints   │
+│  Components  │◀────│  (fetch)     │◀────│  + Auth Middleware   │
+└──────────────┘     └──────────────┘     └──────────────────────┘
+       │                                           │
+       ▼                                           ▼
+┌──────────────┐                          ┌──────────────────────┐
+│  Zustand     │                          │  SQLAlchemy ORM      │
+│  State Store │                          │  → SQLite DB         │
+└──────────────┘                          └──────────────────────┘
+       │
+       ▼
+┌──────────────┐
+│  Optimizer   │  ← Client-side computation
+│  Engine (JS) │    for instant feedback
+└──────────────┘
 ```
 
----
+### 2.3 Frontend Architecture
 
-### 8.1 Hosting Platform Selection Matrix
+The frontend uses a **module-based component architecture** with the following layers:
 
-To accommodate different operational scales—ranging from simple engineering audits to enterprise manufacturing integrations—the hosting architecture supports two tiers.
+| Layer | Purpose | Key Files |
+|---|---|---|
+| **Entry** | React mount point, router setup | `main.jsx`, `App.jsx` |
+| **State** | Global auth and engine state | `useAuthStore.js`, `useEngineStore.js` |
+| **Services** | HTTP communication with backend | `services/api.js` |
+| **Components** | Feature-specific UI modules | `components/*.jsx` |
+| **Utils** | Pure business logic functions | `utils/optimizer.js`, `utils/formulaEngine.js` |
+| **Data** | Static sample datasets | `data/sampleProfiles.js` |
+| **Styles** | CSS variables, dark mode, glassmorphism | `index.css`, `App.css`, `Welcome.css` |
 
-#### 8.1.1 Front-End Hosting: Vercel vs. Netlify
+**State Management Strategy:**
 
-*   **Vercel (Recommended — Production Standard)**:
-    *   *Benefits*: Native integration with Vite-React, automatic parsing and deployment of client-side rewrite rules via `frontend/vercel.json`, and optimized global edge asset streaming.
-    *   *Uptime*: 99.99% globally distributed serverless hosting.
-*   **Netlify (Alternative)**:
-    *   *Benefits*: Excellent form handling and previews. Requires a `netlify.toml` or `_redirects` file to override SPA router fallbacks.
+- **`useAuthStore`** (Zustand + localStorage persist): Manages authentication state — `token`, `user`, `isAuthenticated`. Provides `login()`, `register()`, `logout()` actions.
+- **`useEngineStore`** (Zustand + sessionStorage persist): Manages optimization engine state — `currentSimulationState` and `baselineState` for before/after comparison.
+- **Component-local state** (React `useState`): Screen-level state like tasks, config, profiles, dark mode toggle.
+- **localStorage passthrough**: Tasks, config, profiles, and dark mode are synced to localStorage for offline resilience.
 
-#### 8.1.2 Back-End Container Hosting
+### 2.4 Backend Architecture
 
-| Platform | Deployment Type | Target Audience | Key Advantages | Cost Model |
-| :--- | :--- | :--- | :--- | :--- |
-| **AWS ECS (Fargate)** | Serverless Docker | **Enterprise Scale** | Multi-zone scaling, IAM access control, private VPC database peering, AWS ACM SSL. | Pay-as-you-go |
-| **DigitalOcean App Platform**| Container Instance | **Mid-Market / SME** | Fixed predictable pricing, easy integration with managed Mongo, secure SSL. | Flat Monthly |
-| **Render** | Docker Web Service | **Fast Startup / Free** | Immediate auto-deploys via Git webhooks, dynamic port binding, zero active dev overhead. | Free / Tiered |
-| **Heroku** | Container Dynos | **Legacy Tier** | Simplified CLI commands, but lacks modern multi-region free tiers. | Expensive |
+The backend follows a **layered service architecture**:
 
----
-
-### 8.2 Production Environment Variables Specification
-
-Production keys must reside securely in active container environment configurations and never be committed to source control.
-
-#### 8.2.1 Frontend Environment (`frontend/.env.production`)
-*   `VITE_API_BASE_URL`: Defines the external HTTPS address of the backend service (e.g. `https://api.optoprofit.com`).
-
-#### 8.2.2 Backend Environment Configuration
-
-| Environment Variable | Required Tier | Recommended Value / Source | Purpose |
-| :--- | :---: | :--- | :--- |
-| **`MONGODB_URI`** | CRITICAL | `mongodb+srv://<admin>:<password>@...` | Active production Mongo connection string. |
-| **`SESSION_SECRET`** | CRITICAL | High-entropy random 64-hex key string | Secures cookie hashes, user sessions, and 2FA keys. |
-| **`ENV`** | Required | `"production"` | Enables production DB schemas and limits verbose stack traces. |
-| **`ENABLE_HSTS`** | Highly Rec. | `"true"` | Instructs browser to strictly use TLS (HTTPS) connections. |
-| **`FRONTEND_ORIGIN`**| Required | `https://optoprofit.com` | Primary origin allowed for secure CORS handshakes. |
-| **`FRONTEND_ORIGINS`**| Optional | `https://optoprofit.com,https://www.optoprofit.com` | Comma-separated list of multiple allowed web origins. |
-| **`PORT`** | Auto-injected | Determined dynamically by cloud service (e.g., Render/AWS) | Binds Uvicorn execution loop to the assigned platform port. |
+| Layer | Files | Responsibility |
+|---|---|---|
+| **Application** | `main.py` | FastAPI app instance, lifespan, CORS, middleware, all route handlers |
+| **Authentication** | `auth.py` | Password hashing, JWT creation/decoding, session management, cookie helpers |
+| **Routing** | `routers/analytics.py`, `routers/collaboration.py`, `routers/healthcheck.py` | Scoped API sub-routers |
+| **Models (API)** | `models.py` | Pydantic v2 schemas for request/response validation |
+| **Models (DB)** | `sql_models.py` | SQLAlchemy ORM table definitions |
+| **Database** | `database.py` | Engine, session factory, migrations |
+| **Math Engine** | `math_engine.py` | Pure-function IE calculations (takt time, balance index) |
+| **Email** | `email_service.py` | SMTP transactional emails with simulation fallback |
 
 ---
 
-### 8.3 Domain Binding & HTTPS (SSL) Orchestration
+## 3. Business Logic & Industrial Engineering
 
-To bind a custom domain (e.g. `optoprofit.com`), DNS records must be configured in your domain registrar to map subdomains correctly.
+### 3.1 Core Formulas
 
-#### 8.3.1 DNS Record Matrix
-| Record Type | Host | Target / Destination | Associated Tier |
-| :---: | :---: | :--- | :---: |
-| **A Record** | `@` (Root) | `76.76.21.21` | Frontend (Vercel Edge) |
-| **CNAME** | `www` | `cname.vercel-dns.com` | Frontend (Vercel Subdomain) |
-| **CNAME** | `api` | `opto-profit-backend.onrender.com` (or AWS Load Balancer target) | Backend API endpoint |
+OPTO-PROFIT implements standard industrial engineering formulas for assembly line balancing:
 
-#### 8.3.2 Automated SSL/TLS Protocols
-*   **ACME Let's Encrypt**: Platforms like Vercel and Render coordinate automated SSL issuance and certificate rotations seamlessly via Let's Encrypt. Upon DNS propagation, domains automatically serve high-grade TLS 1.3 encryption.
-*   **AWS ACM**: For enterprise AWS deployments, AWS Certificate Manager handles programmatic certificate issuing, wildcards, and secure renewals behind the Application Load Balancer (ALB).
+#### Takt Time (T_takt)
 
----
-
-### 8.4 Production Build & Compilation Commands
-
-#### 8.4.1 Frontend Build pipeline
-Compile and bundle frontend production assets:
-```bash
-cd frontend
-npm ci
-npm run build
 ```
-*Outputs static production bundles to `/frontend/dist` ready for static Vercel distribution.*
+T_takt = Available Production Time / Daily Demand
+       = shift_time / demand
+```
 
-#### 8.4.2 Backend Docker Execution
-Execute container builds locally or via CI/CD runner environments:
+The maximum allowable cycle time per unit to meet customer demand within available production hours.
+
+#### Target Cycle Time (T_target)
+
+```
+T_target = T_takt × (target_efficiency / 100)
+```
+
+A tighter cycle time than Takt to build in buffer for changeovers, micro-stops, and variability. Default target efficiency is **85%**.
+
+#### Theoretical Minimum Workstations (N_min)
+
+```
+N_min = ⌈Σ(task_times) / T_takt⌉
+```
+
+The theoretical lower bound on the number of stations needed.
+
+#### Line Efficiency (η)
+
+```
+η = Σ(task_times) / (N_actual × C) × 100
+```
+
+Where `N_actual` is the actual number of stations assigned and `C` is the cycle time (Takt or bottleneck).
+
+#### Balance Delay (BD)
+
+```
+BD = 100 - η
+```
+
+The percentage of total station time that is idle due to imperfect balancing.
+
+#### Smoothness Index (SI)
+
+```
+SI = √Σ(C_max - C_i)²
+```
+
+Where `C_max` is the bottleneck station time and `C_i` is each station's time. Lower SI indicates a more evenly balanced line.
+
+#### Total Idle Time
+
+```
+Idle = (N_actual × C) - Σ(task_times)
+```
+
+### 3.2 Optimization Heuristics
+
+The line balancing engine supports three industry-standard heuristics:
+
+| Heuristic | Full Name | Sort Criterion |
+|---|---|---|
+| **LTF** | Longest Task First | Tasks sorted by descending time |
+| **MFT** | Most Following Tasks | Tasks sorted by descending follower count |
+| **RPW** | Ranked Positional Weight | Tasks sorted by descending (own time + all follower times) |
+
+#### Algorithm Flow
+
+```
+1. Sort all tasks by the selected heuristic criterion
+2. Initialize an empty station
+3. For each iteration:
+   a. Find eligible candidates (all predecessors assigned)
+   b. Re-sort candidates by the heuristic
+   c. For each candidate:
+      - Check if it fits the station's remaining time
+      - Check zone exclusion constraints
+      - Check co-location constraints
+      - Check separation constraints
+   d. If a valid task is found → assign to current station
+   e. If no task fits → close current station, open a new one
+4. Compute performance metrics (η, BD, SI, idle time)
+```
+
+### 3.3 Constraint System
+
+The optimizer respects four categories of constraints:
+
+| Constraint | Description | Config Key |
+|---|---|---|
+| **Precedence** | Task B cannot start until Task A is complete | `task.predecessors` |
+| **Zone Exclusion** | Tasks in zone "Wet" cannot share a station with zone "High-Voltage" | `config.zone_exclusions` |
+| **Co-location** | Tasks A and B must be in the same station | `config.co_locations` |
+| **Separation** | Tasks C and D must NOT be in the same station | `config.separations` |
+
+### 3.4 Financial ROI Model
+
+The financial analytics module computes:
+
+```
+Contribution Margin = Unit Price - Unit Cost
+Daily Production    = min(demand, floor(shift_time / cycle_time))
+Labor Cost/Month    = operators × $/hr × (shift_time/60) × work_days
+Monthly Profit      = (daily_production × work_days × margin) - labor_cost
+Profit Increase     = optimized_profit - baseline_profit
+Payback Period      = investment_cost / profit_increase  (months)
+```
+
+Both baseline (pre-optimization) and optimized states are compared.
+
+### 3.5 Critical Path Analysis
+
+The system implements **forward-backward pass** critical path analysis:
+
+```
+Forward Pass:  ES[task] = max(EF[predecessors])
+               EF[task] = ES[task] + task_time
+
+Backward Pass: LF[task] = min(LS[successors])
+               LS[task] = LF[task] - task_time
+
+Critical Tasks: Total Float = LS - ES ≈ 0
+```
+
+Critical tasks have zero float — any delay directly extends the project duration.
+
+### 3.6 Dynamic Formula Engine
+
+Users can define custom formulas using a **safe AST-based evaluator** (backend) or **mathjs** (frontend). The system supports:
+
+- Arithmetic: `+`, `-`, `*`, `/`, `**`, `//`, `%`
+- Comparison: `==`, `!=`, `<`, `>`, `<=`, `>=`
+- Ternary: `condition ? truthy : falsy`
+- User-defined variables: `shift_time`, `demand`, `unit_price`, etc.
+
+**Security**: The backend uses Python's `ast.parse()` in `eval` mode with a strict whitelist of supported node types. No `exec()`, `eval()`, or `__import__` calls are possible.
+
+---
+
+## 4. API Reference
+
+### 4.1 Authentication
+
+| Method | Endpoint | Description | Rate Limit |
+|---|---|---|---|
+| `POST` | `/api/auth/register` | Create new user account | 3/min |
+| `POST` | `/api/auth/login` | Authenticate and receive JWT | 5/min |
+| `GET` | `/api/auth/me` | Get current user profile | — |
+| `POST` | `/api/auth/logout` | Invalidate session | — |
+| `POST` | `/api/auth/change-password` | Update password (requires current) | — |
+| `POST` | `/api/auth/forgot-password` | Request password reset email | 3/min |
+| `POST` | `/api/auth/reset-password` | Reset password using token | 5/min |
+
+### 4.2 Two-Factor Authentication
+
+| Method | Endpoint | Description | Rate Limit |
+|---|---|---|---|
+| `POST` | `/api/auth/2fa/setup` | Generate TOTP secret + QR code | — |
+| `POST` | `/api/auth/2fa/verify` | Verify 2FA code during login | 5/min |
+| `POST` | `/api/auth/2fa/enable` | Activate 2FA for account | — |
+| `POST` | `/api/auth/2fa/disable` | Deactivate 2FA for account | — |
+
+### 4.3 User Management
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/users/me` | Get current user profile (settings module) |
+| `PUT` | `/api/users/me` | Update name, phone, email |
+
+### 4.4 Tasks (Assembly Line Processes)
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/tasks` | List all tasks (auto-seeds defaults for new users) |
+| `POST` | `/api/tasks` | Create a single task |
+| `PUT` | `/api/tasks` | Replace all tasks (bulk update) |
+| `PUT` | `/api/tasks/{task_id}` | Update a specific task |
+| `DELETE` | `/api/tasks/{task_id}` | Delete a specific task |
+
+#### Task Schema
+
+```json
+{
+  "id": "A",
+  "name": "PCB Preparation & Kitting",
+  "time": 12.0,
+  "predecessors": [],
+  "zoning": "None",
+  "custom_attributes": {}
+}
+```
+
+### 4.5 Configuration
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/config` | Get project config (auto-seeds defaults) |
+| `PUT` | `/api/config` | Update project configuration |
+
+#### Config Schema
+
+```json
+{
+  "productName": "Digital Oscilloscope",
+  "variables": [
+    { "key": "shift_time", "label": "Shift Time", "value": 480.0, "unit": "min", "category": "Production" },
+    { "key": "demand", "label": "Daily Demand", "value": 16.0, "unit": "units", "category": "Production" }
+  ],
+  "formulas": {
+    "TaktTime": "shift_time / demand",
+    "MonthlyProfit": "demand * work_days * (unit_price - unit_cost)"
+  },
+  "custom_zones": [],
+  "zone_exclusions": {},
+  "co_locations": [],
+  "separations": [],
+  "target_efficiency": 85
+}
+```
+
+### 4.6 Profiles (Project Snapshots)
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/profiles` | List all saved profiles |
+| `POST` | `/api/profiles` | Save a profile snapshot |
+| `DELETE` | `/api/profiles/{profile_id}` | Delete a profile |
+
+### 4.7 Analytics
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/analytics/roi` | Calculate ROI impact |
+
+### 4.8 Real-time Collaboration
+
+| Protocol | Endpoint | Description |
+|---|---|---|
+| `WebSocket` | `/api/ws/{room_id}` | Collaborative editing channel |
+
+**WebSocket Authentication Flow:**
+
+```
+1. Client connects to ws://host/api/ws/{room_id}
+2. Server accepts the connection
+3. Client MUST send auth message as first frame:
+   {"token": "<jwt>"}
+4. Server validates JWT + session + room scope
+5. If valid → enters collaboration loop
+6. If invalid → closes with 1008 Policy Violation
+```
+
+### 4.9 Health Check
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/status` | Returns `{"status": "ok", "version": "1.0.0"}` |
+
+---
+
+## 5. Database Schema
+
+### 5.1 Entity-Relationship Diagram
+
+```
+┌─────────────────┐       ┌──────────────────┐
+│     users        │       │     sessions      │
+├─────────────────┤       ├──────────────────┤
+│ id (PK)          │──┐   │ id (PK)           │
+│ username         │  │   │ token_hash (UQ)   │
+│ username_norm    │  ├──▶│ user_id (FK)      │
+│ email            │  │   │ expires_at        │
+│ password_hash    │  │   │ created_at        │
+│ created_at       │  │   └──────────────────┘
+│ is_2fa_enabled   │  │
+│ two_factor_secret│  │   ┌──────────────────┐
+│ full_name        │  │   │     tasks         │
+│ phone_number     │  │   ├──────────────────┤
+│ role             │  │   │ pk (PK)           │
+│ tenant_id        │  ├──▶│ task_id           │
+│ failed_login_att │  │   │ user_id (FK)      │
+│ locked_until     │  │   │ tenant_id         │
+└─────────────────┘  │   │ name              │
+                      │   │ time              │
+                      │   │ predecessors_json │
+                      │   │ zoning            │
+                      │   │ custom_attrs_json │
+                      │   │ UQ(task_id,user_id)│
+                      │   └──────────────────┘
+                      │
+                      │   ┌──────────────────┐
+                      │   │     config        │
+                      │   ├──────────────────┤
+                      ├──▶│ id (PK)           │
+                      │   │ user_id (FK, UQ)  │
+                      │   │ tenant_id         │
+                      │   │ data_json         │
+                      │   └──────────────────┘
+                      │
+                      │   ┌──────────────────┐
+                      │   │    profiles       │
+                      │   ├──────────────────┤
+                      ├──▶│ id (PK)           │
+                      │   │ profile_id        │
+                      │   │ user_id (FK)      │
+                      │   │ tenant_id         │
+                      │   │ name              │
+                      │   │ data_json         │
+                      │   │ timestamp         │
+                      │   └──────────────────┘
+                      │
+                      │   ┌──────────────────────┐
+                      │   │ password_reset_tokens │
+                      │   ├──────────────────────┤
+                      └──▶│ id (PK)               │
+                          │ token_hash (UQ)       │
+                          │ user_id (FK)          │
+                          │ created_at            │
+                          │ expires_at            │
+                          │ used_at               │
+                          └──────────────────────┘
+```
+
+### 5.2 Table Descriptions
+
+| Table | Purpose | Key Constraints |
+|---|---|---|
+| `users` | User accounts with auth and profile data | `username_normalized` UNIQUE, `failed_login_attempts` for lockout |
+| `sessions` | Active JWT sessions (hashed) | `token_hash` UNIQUE, `expires_at` for session TTL |
+| `tasks` | Assembly line process definitions | `(task_id, user_id)` UNIQUE, `tenant_id` for multi-tenant queries |
+| `config` | Project configuration (one per user) | `user_id` UNIQUE, JSON blob stores variables/formulas |
+| `profiles` | Saved project snapshots | `data_json` contains full tasks + config snapshot |
+| `password_reset_tokens` | One-time password reset tokens | `token_hash` UNIQUE, `used_at` marks consumption |
+
+### 5.3 Multi-Tenancy
+
+Data isolation is enforced at the query level:
+
+- **Tenant-scoped queries** are used when `user.tenant_id` is set — all users in the same tenant share the same tasks, config, and profiles.
+- **User-scoped fallback** is used when no tenant_id exists — data is isolated per user.
+- Tenant IDs are auto-generated from the company name at registration: `T-{COMPANYNAME[:15]}`.
+- Schema migrations add `tenant_id` columns dynamically at startup for backward compatibility.
+
+---
+
+## 6. Security Architecture
+
+### 6.1 Authentication Flow
+
+```
+┌─────────┐     POST /api/auth/login      ┌──────────────┐
+│  Client  │─────────────────────────────▶│  FastAPI      │
+│          │    {username, password}        │              │
+│          │                               │  1. Lookup    │
+│          │                               │  2. Lockout?  │
+│          │                               │  3. bcrypt    │
+│          │     Set-Cookie: HttpOnly JWT   │  4. JWT+jti   │
+│          │◀─────────────────────────────│  5. SessionDB  │
+│          │     + JSON {access_token}     │              │
+└─────────┘                               └──────────────┘
+```
+
+### 6.2 Security Controls
+
+| Control | Implementation |
+|---|---|
+| **Password Hashing** | bcrypt with auto-generated salt |
+| **Password Strength** | ≥8 chars, 1 uppercase, 1 digit, 1 special character |
+| **JWT Tokens** | HS256 signed, 24hr expiry, `jti` claim for uniqueness |
+| **Session Storage** | Token hash stored in `sessions` table; server-side validation |
+| **HttpOnly Cookies** | Session JWT delivered via `HttpOnly`, `SameSite=Lax` cookie |
+| **Dual-mode Auth** | Cookie-first, Bearer header fallback for API clients |
+| **Account Lockout** | 5 failed attempts → 15 minute lockout per account |
+| **Rate Limiting** | `slowapi` — login: 5/min, register: 3/min, forgot-password: 3/min |
+| **Session Expiry Purge** | Expired sessions purged at server startup |
+| **Password Change** | Invalidates all active sessions |
+| **TOTP 2FA** | pyotp with authenticator app QR code setup |
+| **CORS** | Explicit origin whitelist (no wildcards) |
+| **CSP Headers** | `default-src 'self'`, script-src, style-src, frame-ancestors |
+| **Security Headers** | `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy` |
+| **HSTS** | Opt-in via `ENABLE_HSTS=true` environment variable |
+| **WebSocket Auth** | First-message token pattern (no URL query-string token exposure) |
+| **Formula Safety** | AST whitelist (backend), mathjs sandbox (frontend) |
+| **Email Token Security** | SHA-256 hashed in DB, raw token never logged |
+
+### 6.3 Environment Variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `SESSION_SECRET` | **Prod: Yes** | JWT signing key (crash on start if missing in prod) |
+| `ENV` | No | `development` (default) or `production` |
+| `DATABASE_URL` | No | SQLAlchemy connection string (default: `sqlite:///./optoprofit.db`) |
+| `FRONTEND_ORIGIN` | No | Primary CORS origin (default: `http://localhost:5173`) |
+| `FRONTEND_ORIGINS` | No | Comma-separated additional CORS origins |
+| `ENABLE_HSTS` | No | Set `true` to enable Strict-Transport-Security |
+| `SMTP_HOST` | No | SMTP server for real email delivery |
+| `SMTP_PORT` | No | SMTP port (default: 587) |
+| `SMTP_USERNAME` | No | SMTP login |
+| `SMTP_PASSWORD` | No | SMTP password |
+| `SMTP_FROM_NAME` | No | Email sender display name |
+| `SMTP_FROM_EMAIL` | No | Email sender address |
+| `SMTP_USE_TLS` | No | Enable STARTTLS (default: `true`) |
+
+---
+
+## 7. User Manual
+
+### 7.1 Getting Started
+
+#### Registration
+
+1. Navigate to the application URL
+2. Click **"Create Account"** on the Welcome screen
+3. Enter your **email**, **password** (min 8 chars, 1 uppercase, 1 digit, 1 special), and **company name**
+4. Upon success, you are automatically logged in and redirected to the Dashboard
+
+#### Login
+
+1. Enter your registered **username/email** and **password**
+2. If 2FA is enabled, enter the 6-digit code from your authenticator app
+3. You'll be redirected to the Dashboard
+
+### 7.2 Dashboard
+
+The Dashboard provides a real-time overview of your assembly line's performance metrics.
+
+**Key Indicators Displayed:**
+
+| KPI | Description |
+|---|---|
+| **Takt Time** | Target time per unit to meet demand |
+| **Workstations** | Number of stations in the optimized line |
+| **Line Efficiency** | Percentage of productive vs. idle time |
+| **Balance Delay** | Complement of efficiency (idle %) |
+| **Smoothness Index** | Measure of station time evenness |
+| **Total Idle Time** | Sum of all station idle times |
+
+**Interactive Features:**
+
+- **Formula Trace**: Step-by-step derivation of each KPI formula with substituted values
+- **Takt Time Sweep Chart**: Visualizes how station count and efficiency change across a range of takt times
+- **Dark/Light Mode**: Toggle via the sidebar
+- **Executive Report**: One-click PDF export with KPI comparison tables
+
+### 7.3 Process Planning
+
+The Process Planning module is where you define your assembly tasks.
+
+**Task Definition:**
+
+| Field | Description |
+|---|---|
+| **ID** | Short identifier (e.g., "A", "B", "C") |
+| **Name** | Descriptive name (e.g., "PCB Preparation & Kitting") |
+| **Time** | Duration in minutes |
+| **Predecessors** | List of task IDs that must be completed first |
+| **Zoning** | Optional zone assignment (e.g., "Wet-Zone", "Clean-Room") |
+| **Custom Attributes** | Free-form key-value pairs (e.g., skill level, tooling) |
+
+**Actions:**
+
+- **Add Task**: Create a new process step
+- **Edit Task**: Click any row to modify in-place
+- **Delete Task**: Remove a task (validates no downstream dependencies)
+- **Bulk Import**: Replace all tasks at once
+- **Export CSV**: Download task data as a spreadsheet
+- **Autosave**: Changes are saved to the server within 2 seconds of editing
+
+### 7.4 Line Optimization
+
+The Line Optimization module runs the heuristic balancing algorithm.
+
+**Configuring an Optimization Run:**
+
+1. **Select Heuristic**: Choose from LTF, MFT, or RPW
+2. **Set Target Efficiency**: Default 85% — the optimizer calculates target cycle time from this
+3. **Review Constraints**: Zone exclusions, co-locations, and separations are pulled from Settings
+
+**Output:**
+
+- **Station Assignment Table**: Shows which tasks are assigned to each workstation
+- **Station Load Chart**: Bar chart comparing station times to the cycle time threshold
+- **Metrics Panel**: Efficiency, balance delay, idle time, smoothness index
+- **Critical Station**: Highlighted with the highest critical path task concentration
+
+### 7.5 Financial Analytics
+
+The Financial Analytics module quantifies the ROI of your optimization decisions.
+
+**Configuration Variables:**
+
+| Variable | Description | Default |
+|---|---|---|
+| `unit_price` | Selling price per unit | ₹25,000 |
+| `unit_cost` | Manufacturing cost per unit | ₹15,000 |
+| `work_days` | Working days per month | 25 |
+| `operator_cost_per_hour` | Labor cost per operator/hour | ₹150 |
+| `investment_cost` | Capital expenditure for optimization | ₹25,000 |
+| `current_cycle_time` | Pre-optimization cycle time | 35 min |
+| `current_operators` | Pre-optimization headcount | 5 |
+
+**Output Metrics:**
+
+- Monthly baseline vs. optimized profit
+- Profit increase from optimization
+- Baseline vs. optimized labor costs
+- Payback period (months)
+- Daily production comparison
+
+### 7.6 Precedence Network
+
+Visual DAG (Directed Acyclic Graph) of task dependencies built with React Flow.
+
+- **Nodes**: Each task rendered as a card with ID, name, and time
+- **Edges**: Directed arrows from predecessors to successors
+- **Critical Path**: Critical tasks highlighted in accent color
+- **Circular Dependency Detection**: Alerts if an impossible cycle is detected
+
+### 7.7 Floor Layout Designer
+
+Interactive 2D workstation layout for factory floor planning.
+
+- **Drag-and-Drop**: Position workstations on a grid canvas
+- **Station Cards**: Display assigned tasks, total time, and zone indicators
+- **Snap-to-Grid**: Automatic alignment for clean layouts
+- **Export**: Captured as an image for the Executive Report PDF
+
+### 7.8 Settings
+
+#### Profile Settings
+
+- Edit display name, email, and phone number
+- Change password (requires current password verification)
+
+#### Two-Factor Authentication
+
+1. Go to **Settings → Security**
+2. Click **"Enable 2FA"**
+3. Scan the QR code with Google Authenticator, Authy, or 1Password
+4. Enter the 6-digit verification code to activate
+
+#### Project Settings
+
+- Edit product name
+- Configure production variables (shift time, demand, pricing)
+- Define custom formulas
+- Set target efficiency
+- Configure zone exclusions, co-locations, and separation constraints
+
+#### Profile Management (Project Snapshots)
+
+- **Save Profile**: Capture the current tasks + config as a named snapshot
+- **Load Profile**: Restore a previous state
+- **Delete Profile**: Remove saved snapshots
+
+### 7.9 Keyboard Shortcuts & Navigation
+
+The application uses a sidebar navigation with the following modules:
+
+| Icon | Module | Route |
+|---|---|---|
+| 📊 | Dashboard | `/app/dashboard` |
+| 📋 | Process Planning | `/app/process-planning` |
+| 🏗️ | Conceptual Layout | `/app/conceptual-layout` |
+| ⚡ | Line Optimization | `/app/line-optimization` |
+| 📈 | Financial Analytics | `/app/financial-analytics` |
+| 🔗 | Precedence Network | `/app/precedence-network` |
+| 🏭 | Floor Layout | `/app/floor-layout` |
+| ⚙️ | Settings | Modal overlay |
+
+---
+
+## 8. Deployment & Operations
+
+### 8.1 Local Development
+
+#### Backend
+
 ```bash
 cd backend
-docker build -t optoprofit-backend:latest .
-docker run -p 8000:8000 --env-file .env optoprofit-backend:latest
+python -m venv venv
+./venv/Scripts/activate   # Windows
+pip install -r requirements.txt
+
+# Start with auto-reload
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+#### Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+# → Vite dev server at http://localhost:5173
+```
+
+### 8.2 Docker Deployment
+
+The project includes a `docker-compose.yml` for single-command deployment:
+
+```bash
+docker-compose up -d --build
+```
+
+**Service Architecture:**
+
+| Service | Image | Port | Description |
+|---|---|---|---|
+| `frontend` | Custom (Nginx) | 80 | Production-built React SPA |
+| `backend` | Custom (Uvicorn) | 8000 | FastAPI API server |
+| `db` | `mongo:7.0.12` (pinned) | Internal only | MongoDB (legacy; SQLite is primary) |
+
+**Security Notes:**
+
+- MongoDB is **not** exposed to the host — accessible only within the Docker `app-network`
+- Docker images use pinned versions (no `:latest`)
+- `SESSION_SECRET` must be set in `.env` for production
+
+### 8.3 Production Checklist
+
+| Step | Status | Details |
+|---|---|---|
+| Set `ENV=production` | Required | Enforces `SESSION_SECRET`, HSTS opt-in |
+| Set `SESSION_SECRET` | Required | `python -c "import secrets; print(secrets.token_hex(32))"` |
+| Set `FRONTEND_ORIGINS` | Required | Comma-separated list of allowed frontend URLs |
+| Configure SMTP | Recommended | Set `SMTP_HOST`, `SMTP_USERNAME`, `SMTP_PASSWORD` for real emails |
+| Enable HSTS | Recommended | Set `ENABLE_HSTS=true` when behind TLS |
+| Review CORS origins | Required | Remove localhost origins for production |
+| Pin Docker images | Done | All images use specific version tags |
+| Remove debug logging | Recommended | Set log level to WARNING in production |
+
+### 8.4 Environment File Example
+
+```env
+# === Application ===
+ENV=production
+SESSION_SECRET=your-random-64-char-hex-string
+
+# === Database ===
+DATABASE_URL=sqlite:///./optoprofit.db
+
+# === CORS ===
+FRONTEND_ORIGIN=https://your-domain.com
+FRONTEND_ORIGINS=https://your-domain.com,https://www.your-domain.com
+
+# === Email ===
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=your-email@gmail.com
+SMTP_PASSWORD=your-app-password
+SMTP_FROM_NAME=OPTO-PROFIT
+SMTP_FROM_EMAIL=noreply@your-domain.com
+SMTP_USE_TLS=true
+
+# === Security ===
+ENABLE_HSTS=true
 ```
 
 ---
 
-### 8.5 Production Pre-Flight Launch Checklist
+## 9. CI/CD Pipeline
 
-- [ ] **Database Integrity**: Confirm MongoDB Atlas cluster has backup retention enabled.
-- [ ] **Network Whitelisting**: Set MongoDB Atlas Network IP access appropriately (`0.0.0.0/0` for dynamic IPs or specific VPC blocks).
-- [ ] **Session Protection**: Generate a secure `SESSION_SECRET` that matches cryptographically high standards.
-- [ ] **CORS Verification**: Double-check that `FRONTEND_ORIGIN` aligns exactly with your live Vercel URL.
-- [ ] **HTTPS Routing**: Verify that all HTTP calls automatically redirect to HTTPS.
-- [ ] **Rate Limits**: Ensure frontend traffic routes are not hitting the backend rate limits prematurely (monitored via server request logs).
+### 9.1 Continuous Integration (CI)
 
+**Trigger**: Every push to any branch + all pull requests.
+
+```
+┌──────────────────┐
+│ Standards Check   │  ← python scripts/check_standards.py
+└────────┬─────────┘
+         │
+    ┌────┴────┐
+    ▼         ▼
+┌────────┐ ┌────────────────────────────────┐
+│Frontend│ │ Backend                        │
+│ Lint   │ │ Install deps                   │
+│ Build  │ │ Run unit tests (unittest)      │
+│        │ │ Start API → Health check GET   │
+│        │ │ /api/status                    │
+└────────┘ └────────────────────────────────┘
+```
+
+**Frontend Jobs:**
+- `npm ci` → `npm run lint` → `npm run build`
+
+**Backend Jobs:**
+- `pip install -r requirements.txt`
+- `python -m unittest discover -s tests -p "test_*.py" -v`
+- Start Uvicorn → poll `GET /api/status` (up to 20 retries, 2s interval)
+
+### 9.2 Continuous Deployment (CD)
+
+**Trigger**: After successful CI on `main` (or manual dispatch).
+
+1. Build Docker images for frontend and backend
+2. Push to GitHub Container Registry (GHCR):
+   - `ghcr.io/<owner>/<repo>/frontend`
+   - `ghcr.io/<owner>/<repo>/backend`
+3. Optional: Trigger deploy webhook via `DEPLOY_WEBHOOK_URL` repository secret
+
+### 9.3 Test Suite
+
+| Test File | Framework | Coverage |
+|---|---|---|
+| `test_math_engine.py` | `unittest` | Takt time, target cycle time, balance index edge cases |
+| `test_auth_flow.py` | `unittest` | Registration, login, password change, session management |
+| `test_security_remediations.py` | `unittest` | Account lockout, HttpOnly cookies, password strength, WS auth |
+| `optimizer.test.js` | `vitest` | Frontend optimizer functions |
+
+---
+
+## 10. Desktop Application
+
+### 10.1 Architecture
+
+The desktop application bundles the full stack into a standalone Windows executable:
+
+```
+OPTO-PROFIT.exe
+├── Backend (FastAPI + Uvicorn) — runs on 127.0.0.1:48157
+├── Frontend (Pre-built React SPA)
+└── Native Window (pywebview) — or falls back to system browser
+```
+
+### 10.2 Execution Flow
+
+1. **Launch**: User double-clicks `OPTO-PROFIT.exe`
+2. **Server Start**: Uvicorn starts in a daemon thread on port `48157`
+3. **Health Poll**: Main thread polls `/api/status` for up to 20 seconds
+4. **Window Open**: `pywebview` opens a native OS window pointing to the local server
+5. **Fallback**: If `pywebview` fails (missing WebView2), opens the default browser instead
+6. **Shutdown**: Closing the window terminates the process; daemon thread dies automatically
+
+### 10.3 Building the Desktop App
+
+```powershell
+cd desktop
+pip install -r requirements.txt
+.\build.ps1
+# Output: dist/OPTO-PROFIT.exe
+```
+
+### 10.4 Development Mode
+
+For frontend hot-reloading during desktop development:
+
+```bash
+# Terminal 1: Start Vite dev server
+cd frontend && npm run dev
+
+# Terminal 2: Launch desktop pointing to Vite
+cd desktop && python run.py --dev
+```
+
+---
+
+## Appendix A: Default Task Set
+
+The system seeds the following **10 tasks** for new users, representing a Digital Oscilloscope assembly line:
+
+| ID | Name | Time (min) | Predecessors |
+|---|---|---|---|
+| A | PCB Preparation & Kitting | 12.0 | — |
+| B | Motherboard SMT & Assembly | 18.0 | A |
+| C | Display Module Preparation | 15.0 | A |
+| D | Power Supply Unit Prep | 10.0 | A |
+| E | Housing & Chassis Prep | 8.0 | — |
+| F | Main PCB Integration | 20.0 | B, C |
+| G | System Wiring & Connections | 14.0 | D, F |
+| H | Final Assembly & Enclosure | 16.0 | E, G |
+| I | Calibration & Testing | 22.0 | H |
+| J | Quality Inspection & Packing | 10.0 | I |
+
+**Total Work Content**: 145 minutes  
+**Default Takt Time**: 480 / 16 = 30 min  
+**Theoretical Minimum Stations**: ⌈145 / 30⌉ = 5
+
+---
+
+## Appendix B: Default Configuration Variables
+
+| Key | Label | Value | Unit | Category |
+|---|---|---|---|---|
+| `shift_time` | Shift Time | 480.0 | min | Production |
+| `demand` | Daily Demand | 16.0 | units | Production |
+| `unit_price` | Unit Price | 25,000 | ₹ | Financial |
+| `unit_cost` | Unit Cost | 15,000 | ₹ | Financial |
+| `work_days` | Work Days / Month | 25 | days | Financial |
+| `current_cycle_time` | Current Cycle Time | 35.0 | min | Baseline |
+| `current_operators` | Current Operators | 5 | people | Baseline |
+| `operator_cost_per_hour` | Operator Cost / Hour | 150 | ₹ | Financial |
+| `investment_cost` | Investment Cost | 25,000 | ₹ | Financial |
+| `target_cycle_time` | Target Cycle Time | 30.0 | min | Production |
+| `currency_symbol` | Currency Symbol | — | ₹ | General |
+
+---
+
+## Appendix C: Glossary
+
+| Term | Definition |
+|---|---|
+| **Takt Time** | Maximum cycle time to meet demand within available production time |
+| **Cycle Time** | Actual time of the bottleneck (slowest) workstation |
+| **Balance Delay** | Percentage of wasted capacity due to uneven task distribution |
+| **Smoothness Index** | Standard deviation of station times relative to the bottleneck |
+| **Precedence Graph** | DAG representing task ordering constraints |
+| **Heuristic** | Rule-of-thumb algorithm for NP-hard line balancing problems |
+| **LTF** | Longest Task First — prioritizes tasks with highest individual time |
+| **MFT** | Most Following Tasks — prioritizes tasks with the most successors |
+| **RPW** | Ranked Positional Weight — prioritizes by own time + all successor times |
+| **TOTP** | Time-based One-Time Password — standard used by authenticator apps |
+| **CSP** | Content Security Policy — HTTP header that prevents XSS attacks |
+| **HSTS** | HTTP Strict Transport Security — forces HTTPS connections |
+| **Tenant** | An organizational workspace — all users in a tenant share data |
+
+---
+
+*This document is auto-generated from the OPTO-PROFIT codebase and reflects the current state of the system. For the latest updates, consult the source code and the inline documentation.*

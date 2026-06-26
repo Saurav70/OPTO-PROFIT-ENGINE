@@ -1,3 +1,4 @@
+import React, { useState, useEffect } from 'react';
 import {
   Activity,
   ArrowRight,
@@ -23,6 +24,13 @@ const getStationIcon = (idx) => {
 };
 
 const ConceptualLayout = ({ tasks, config, optimization, onNavigate }) => {
+  const [taktTime, setTaktTime] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    calculateTaktTime(config).then(t => { if (!cancelled) setTaktTime(t); });
+    return () => { cancelled = true; };
+  }, [config]);
+
   if (!tasks || tasks.length === 0) {
     return (
       <EmptyState
@@ -35,14 +43,14 @@ const ConceptualLayout = ({ tasks, config, optimization, onNavigate }) => {
     );
   }
 
-  const taktTime = calculateTaktTime(config);
   const nMin = calculateNmin(tasks, taktTime);
   const demand = getVariableValue(config?.variables || [], 'demand', 0);
   const stations = optimization?.stations || [];
   const totalTaskTime = optimization?.totalTaskTime ?? tasks.reduce((sum, task) => sum + (Number(task.time) || 0), 0);
 
   const summaryStats = [
-    { label: 'Daily Demand', value: `${demand} units`, icon: Activity },
+    { label: 'Daily Demand', value: `${demand} units`, icon: Package },
+    { label: 'Total Work Content', value: `${totalTaskTime.toFixed(1)} min`, icon: Activity },
     { label: 'Cycle Time', value: `${(taktTime || 0).toFixed(1)} min`, icon: Zap },
     { label: 'Line Efficiency', value: `${optimization?.efficiency || '0.00'}%`, icon: CheckCircle2 },
     { label: 'Target Stations', value: nMin || 0, icon: Layout },
@@ -55,17 +63,6 @@ const ConceptualLayout = ({ tasks, config, optimization, onNavigate }) => {
       exit={{ opacity: 0 }}
       className="conceptual-layout-screen"
     >
-      <header className="conceptual-header">
-        <div>
-          <p className="conceptual-eyebrow">{(config?.productName || 'Line').toUpperCase()} ASSEMBLY LINE</p>
-          <h2 className="header-title conceptual-title">Conceptual Layout Diagram</h2>
-        </div>
-        <div className="conceptual-total">
-          <span>Total Work Content</span>
-          <strong>{totalTaskTime.toFixed(1)} min</strong>
-        </div>
-      </header>
-
       <section className="conceptual-summary-grid" aria-label="Conceptual layout summary">
         {summaryStats.map((stat) => {
           const Icon = stat.icon;
@@ -154,11 +151,6 @@ const ConceptualLayout = ({ tasks, config, optimization, onNavigate }) => {
                 );
               })}
             </div>
-            <footer className="conceptual-footer">
-              <span>Optimized Flow</span>
-              <span>Zero Waste</span>
-              <span>Balanced Workload</span>
-            </footer>
           </>
         )}
       </section>

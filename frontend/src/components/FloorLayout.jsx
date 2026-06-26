@@ -10,14 +10,12 @@ import {
   Square,
   Workflow,
   Grid,
-  X,
-  Clock,
   AlertTriangle,
   Plus,
   Minus,
   RefreshCw,
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { calculateTaktTime, runOptimization } from '../utils/optimizer';
 import EmptyState from './EmptyState';
 
@@ -103,30 +101,165 @@ const getStationRole = (idx, total) => {
   return `Assembly cell ${idx + 1}`;
 };
 
+const renderMachineSVG = (type, color = 'var(--accent-primary)') => {
+  switch (type) {
+    case 'robot':
+      return (
+        <svg viewBox="0 0 100 100" width="100%" height="100%" style={{ fill: 'none', stroke: color, strokeWidth: 2 }}>
+          <path d="M20 90 L80 90 L75 80 L25 80 Z" fill="rgba(100,116,139,0.12)" />
+          <circle cx="50" cy="75" r="10" strokeWidth={3} />
+          <line x1="50" y1="75" x2="35" y2="45" strokeWidth={5} />
+          <circle cx="35" cy="45" r="6" fill={color} />
+          <line x1="35" y1="45" x2="65" y2="25" strokeWidth={4} />
+          <circle cx="65" cy="25" r="5" fill={color} />
+          <line x1="65" y1="25" x2="75" y2="25" strokeWidth={3} />
+          <path d="M75 18 L85 25 L75 32" strokeWidth={2} />
+          <circle cx="65" cy="25" r="12" stroke="rgba(168, 85, 247, 0.2)" strokeWidth={1} />
+        </svg>
+      );
+    case 'conveyor':
+      return (
+        <svg viewBox="0 0 100 100" width="100%" height="100%" style={{ fill: 'none', stroke: color, strokeWidth: 2 }}>
+          <rect x="10" y="35" width="80" height="20" rx="10" strokeWidth={3} fill="rgba(100,116,139,0.06)" />
+          <circle cx="25" cy="45" r="8" />
+          <circle cx="25" cy="45" r="2" fill={color} />
+          <circle cx="50" cy="45" r="8" />
+          <circle cx="50" cy="45" r="2" fill={color} />
+          <circle cx="75" cy="45" r="8" />
+          <circle cx="75" cy="45" r="2" fill={color} />
+          <rect x="40" y="20" width="20" height="15" rx="2" fill="rgba(168, 85, 247, 0.2)" stroke={color} strokeWidth={2} />
+        </svg>
+      );
+    case 'cnc':
+      return (
+        <svg viewBox="0 0 100 100" width="100%" height="100%" style={{ fill: 'none', stroke: color, strokeWidth: 2 }}>
+          <rect x="15" y="15" width="70" height="70" rx="8" strokeWidth={3} fill="rgba(100,116,139,0.1)" />
+          <rect x="25" y="25" width="50" height="35" rx="4" stroke="rgba(255,255,255,0.15)" fill="rgba(0,0,0,0.2)" />
+          <rect x="25" y="68" width="30" height="10" rx="2" stroke="rgba(255,255,255,0.1)" />
+          <circle cx="65" cy="73" r="3" fill="#ef4444" />
+          <circle cx="73" cy="73" r="3" fill="#10b981" />
+          <line x1="50" y1="25" x2="50" y2="40" strokeWidth={4} />
+          <polygon points="46,40 54,40 50,46" fill={color} stroke="none" />
+        </svg>
+      );
+    case 'bench':
+      return (
+        <svg viewBox="0 0 100 100" width="100%" height="100%" style={{ fill: 'none', stroke: color, strokeWidth: 2 }}>
+          <rect x="10" y="55" width="80" height="8" rx="2" strokeWidth={2} fill={color} />
+          <line x1="20" y1="63" x2="20" y2="90" strokeWidth={3} />
+          <line x1="80" y1="63" x2="80" y2="90" strokeWidth={3} />
+          <line x1="20" y1="75" x2="80" y2="75" strokeWidth={1} />
+          <rect x="25" y="42" width="12" height="13" rx="1" fill="rgba(100,116,139,0.12)" />
+          <path d="M45 55 L45 35 M42 35 L48 35" strokeWidth={2} />
+          <circle cx="65" cy="45" r="6" fill="rgba(168, 85, 247, 0.15)" />
+          <path d="M65 45 L60 55" />
+        </svg>
+      );
+    case 'inspector':
+      return (
+        <svg viewBox="0 0 100 100" width="100%" height="100%" style={{ fill: 'none', stroke: color, strokeWidth: 2 }}>
+          <path d="M20 85 L20 25 A 30 30 0 0 1 80 25 L80 85" strokeWidth={4} fill="none" />
+          <rect x="15" y="35" width="10" height="15" rx="2" fill="rgba(100,116,139,0.2)" />
+          <rect x="75" y="35" width="10" height="15" rx="2" fill="rgba(100,116,139,0.2)" />
+          <line x1="25" y1="42" x2="50" y2="42" stroke="rgba(239, 68, 68, 0.5)" strokeWidth={1} strokeDasharray="2 2" />
+          <line x1="75" y1="42" x2="50" y2="42" stroke="rgba(239, 68, 68, 0.5)" strokeWidth={1} strokeDasharray="2 2" />
+          <circle cx="50" cy="70" r="10" fill="rgba(168, 85, 247, 0.15)" />
+          <path d="M45 70 L48 73 L55 67" stroke="#10b981" strokeWidth={2} />
+        </svg>
+      );
+    default:
+      return (
+        <svg viewBox="0 0 100 100" width="100%" height="100%" style={{ fill: 'none', stroke: color, strokeWidth: 2 }}>
+          <line x1="15" y1="70" x2="85" y2="70" strokeWidth={3} />
+          <circle cx="50" cy="35" r="12" strokeWidth={2.5} fill="rgba(100,116,139,0.06)" />
+          <path d="M30 65 C 30 50, 70 50, 70 65" strokeWidth={2.5} />
+          <circle cx="42" cy="58" r="3" fill={color} />
+          <circle cx="58" cy="58" r="3" fill={color} />
+          <path d="M42 58 L50 63 L58 58" strokeWidth={1.5} />
+        </svg>
+      );
+  }
+};
+
 const FloorLayout = ({ tasks = [], config, onNavigate, optimization: sharedOptimization }) => {
-  const taktTime = useMemo(
-    () => calculateTaktTime(config || {}),
-    [config]
-  );
-  // P2-5: Use shared optimization from App if available, otherwise compute locally
-  const localOptimization = useMemo(
-    () => runOptimization(tasks || [], taktTime, 'LTF', config || {}),
-    [tasks, taktTime, config]
-  );
-  const optimization = sharedOptimization || localOptimization;
+  const [taktTime, setTaktTime] = useState(0);
+  const [localOptimization, setLocalOptimization] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const compute = async () => {
+      const takt = await calculateTaktTime(config || {});
+      const opt = runOptimization(tasks || [], takt, 'LTF', config || {});
+      if (!cancelled) {
+        setTaktTime(takt);
+        setLocalOptimization(opt);
+      }
+    };
+    compute();
+    return () => { cancelled = true; };
+  }, [tasks, config]);
+
+  // P2-5: Use shared optimization from App if available, otherwise use locally computed
+  const optimization = useMemo(() => {
+    return sharedOptimization || localOptimization || { stations: [], efficiency: '0.00', nActual: 0, totalIdleTime: 0, balanceDelay: '0.00' };
+  }, [sharedOptimization, localOptimization]);
 
   const [layoutType, setLayoutType] = useState('u-shape');
   const [showArrows, setShowArrows] = useState(true);
   const [isSimulating, setIsSimulating] = useState(false);
   const [selectedStationIdx, setSelectedStationIdx] = useState(0);
+  const [stationMachines, _setStationMachines] = useState({});
+  const [stationOffsets, setStationOffsets] = useState(() =>
+    createOffsetMap(optimization?.stations?.length || 0)
+  );
+
+  const getStationMachineType = (idx, total) => {
+    if (stationMachines[idx]) return stationMachines[idx];
+    if (idx === 0) return 'conveyor';
+    if (idx === total - 1) return 'inspector';
+    return idx % 2 === 0 ? 'cnc' : 'operator';
+  };
+
+  const clearanceConflicts = useMemo(() => {
+    const conflicts = new Set();
+    if (!optimization || !optimization.stations) return conflicts;
+    
+    // We compute positions first to check distances
+    const total = optimization.stations.length;
+    const basePos = getBaseLayoutPositions(layoutType, total);
+    
+    optimization.stations.forEach((s1, i) => {
+      optimization.stations.forEach((s2, j) => {
+        if (i >= j) return;
+        
+        const b1 = basePos[i] || { x: 100 + i * 250, y: 210 };
+        const o1 = stationOffsets[i] || { x: 0, y: 0 };
+        const absoluteC1 = {
+          x: b1.x + o1.x + STATION_CARD_WIDTH / 2,
+          y: b1.y + o1.y + STATION_CARD_HEIGHT / 2,
+        };
+
+        const b2 = basePos[j] || { x: 100 + j * 250, y: 210 };
+        const o2 = stationOffsets[j] || { x: 0, y: 0 };
+        const absoluteC2 = {
+          x: b2.x + o2.x + STATION_CARD_WIDTH / 2,
+          y: b2.y + o2.y + STATION_CARD_HEIGHT / 2,
+        };
+
+        const dist = Math.hypot(absoluteC2.x - absoluteC1.x, absoluteC2.y - absoluteC1.y);
+        if (dist < 210) { // Safety clearance boundary (2.2m)
+          conflicts.add(i);
+          conflicts.add(j);
+        }
+      });
+    });
+    return conflicts;
+  }, [optimization, layoutType, stationOffsets]);
   const [snapToGrid] = useState(true);
   const [gridSize] = useState(DEFAULT_GRID);
   const [simulationSpeed, setSimulationSpeed] = useState(1);
   const [viewportWidth, setViewportWidth] = useState(
     typeof window !== 'undefined' ? window.innerWidth : 1440
-  );
-  const [stationOffsets, setStationOffsets] = useState(() =>
-    createOffsetMap(optimization?.stations?.length || 0)
   );
   const [simulationState, setSimulationState] = useState({
     phase: 'idle',
@@ -199,7 +332,37 @@ const FloorLayout = ({ tasks = [], config, onNavigate, optimization: sharedOptim
     setIsPanning(false);
   };
 
-  const isStacked = viewportWidth < 1180;
+  // Touch equivalents for canvas panning on mobile/tablet
+  const handleGridTouchStart = (e) => {
+    if (e.touches.length !== 1) return;
+    const touch = e.touches[0];
+    setIsPanning(true);
+    setPanStart({
+      x: touch.clientX - panOffset.x,
+      y: touch.clientY - panOffset.y,
+    });
+  };
+
+  const handleGridTouchMove = (e) => {
+    if (!isPanning || e.touches.length !== 1) return;
+    e.preventDefault(); // Prevent page scroll while panning canvas
+    const touch = e.touches[0];
+    setPanOffset({
+      x: touch.clientX - panStart.x,
+      y: touch.clientY - panStart.y,
+    });
+  };
+
+  const handleGridTouchEnd = () => {
+    setIsPanning(false);
+  };
+
+  const fitAllToView = () => {
+    setZoom(0.75);
+    setPanOffset({ x: 0, y: 0 });
+  };
+
+  const isStacked = viewportWidth < 900;
   const safeSelectedStationIdx =
     optimization.stations.length > 0
       ? Math.min(Math.max(selectedStationIdx, 0), optimization.stations.length - 1)
@@ -505,18 +668,46 @@ const FloorLayout = ({ tasks = [], config, onNavigate, optimization: sharedOptim
         height: '100%',
         background: 'var(--bg-main)',
         borderRadius: 'var(--radius-lg)',
-        overflow: 'hidden',
+        overflow: isStacked ? 'auto' : 'hidden',
         border: '1px solid var(--border-color)',
         transition: 'var(--transition-smooth)',
       }}
     >
+      <style>{`
+        @keyframes optoFlowDash {
+          to {
+            stroke-dashoffset: -40;
+          }
+        }
+        .opto-flow-active {
+          animation: optoFlowDash 1.4s linear infinite;
+        }
+        .opto-flow-transfer {
+          animation: optoFlowDash 0.6s linear infinite;
+        }
+        @keyframes optoPulseClearance {
+          0% {
+            box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+          }
+          70% {
+            box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+          }
+          100% {
+            box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+          }
+        }
+        .opto-collision-pulse {
+          animation: optoPulseClearance 1.5s infinite;
+        }
+      `}</style>
 
       <div
         style={{
-          flex: 1,
+          flex: isStacked ? 'none' : 1,
           minHeight: 0,
           display: 'grid',
           gridTemplateColumns: isStacked ? '1fr' : '360px minmax(0, 1fr)',
+          gridTemplateRows: isStacked ? 'auto minmax(500px, 1fr)' : '1fr',
           gap: '1px',
           background: 'var(--border-color)',
         }}
@@ -525,11 +716,13 @@ const FloorLayout = ({ tasks = [], config, onNavigate, optimization: sharedOptim
           style={{
             background: 'var(--card-bg)',
             minHeight: 0,
+            maxHeight: isStacked ? '320px' : 'none',
+            overflowY: isStacked ? 'auto' : 'visible',
             display: 'flex',
             flexDirection: 'column',
           }}
         >
-          <div style={{ padding: '1.1rem 1.1rem 0', overflowY: 'auto' }}>
+          <div style={{ padding: '1.1rem 1.1rem 0', overflowY: isStacked ? 'visible' : 'auto' }}>
             <div className="glow-card" style={{ padding: '1rem', marginBottom: '1rem' }}>
               <div
                 style={{
@@ -671,6 +864,30 @@ const FloorLayout = ({ tasks = [], config, onNavigate, optimization: sharedOptim
                     {displaySimulationState.status}
                   </div>
                 </div>
+
+                {clearanceConflicts.size > 0 && (
+                  <div
+                    style={{
+                      marginTop: '0.75rem',
+                      padding: '0.65rem 0.85rem',
+                      borderRadius: 'var(--radius-sm)',
+                      background: 'rgba(239, 68, 68, 0.12)',
+                      border: '1px solid rgba(239, 68, 68, 0.3)',
+                      color: 'var(--accent-danger)',
+                      fontSize: '0.68rem',
+                      fontWeight: 800,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      lineHeight: '1.3'
+                    }}
+                  >
+                    <AlertTriangle size={13} style={{ flexShrink: 0 }} />
+                    <span>
+                      <strong>SAFETY CODE ALERT:</strong> {clearanceConflicts.size} cells are violating safety clearance boundaries (&lt; 2.2m buffer).
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -729,7 +946,7 @@ const FloorLayout = ({ tasks = [], config, onNavigate, optimization: sharedOptim
                       </div>
                     </div>
 
-                    <div style={{ marginTop: '0.65rem', display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '0.45rem' }}>
+                    <div className="telemetry-stats-grid" style={{ marginTop: '0.65rem' }}>
                       <div style={{ padding: '0.45rem', borderRadius: 'var(--radius-sm)', background: 'var(--card-bg)' }}>
                         <div style={{ fontSize: '0.55rem', fontWeight: 900, color: 'var(--text-sub)' }}>LOAD</div>
                         <div style={{ marginTop: '0.15rem', fontSize: '0.75rem', fontWeight: 900, color: 'var(--text-white)' }}>
@@ -758,7 +975,7 @@ const FloorLayout = ({ tasks = [], config, onNavigate, optimization: sharedOptim
 
         <div
           style={{
-            minHeight: 0,
+            minHeight: isStacked ? '500px' : 0,
             display: 'flex',
             flexDirection: 'column',
             background: 'var(--bg-main)',
@@ -771,15 +988,19 @@ const FloorLayout = ({ tasks = [], config, onNavigate, optimization: sharedOptim
             onMouseMove={handleGridMouseMove}
             onMouseUp={handleGridMouseUp}
             onMouseLeave={handleGridMouseUp}
+            onTouchStart={handleGridTouchStart}
+            onTouchMove={handleGridTouchMove}
+            onTouchEnd={handleGridTouchEnd}
             style={{
               flex: 1,
-              minHeight: 0,
-              overflow: 'hidden',
+              minHeight: isStacked ? '500px' : '480px',
+              overflow: 'auto',
               padding: '1rem',
               position: 'relative',
               background:
                 'radial-gradient(circle at top left, rgba(13, 148, 136, 0.12), transparent 30%), var(--bg-main)',
               cursor: isPanning ? 'grabbing' : 'grab',
+              touchAction: 'none', // Prevent browser scroll interfering with canvas touch pan
             }}
           >
             {/* Zoom / Pan Workspace Grid Canvas */}
@@ -788,11 +1009,11 @@ const FloorLayout = ({ tasks = [], config, onNavigate, optimization: sharedOptim
                 position: 'absolute',
                 left: '1rem',
                 top: '1rem',
-                width: canvasMetrics.width,
-                height: canvasMetrics.height,
+                width: Math.max(canvasMetrics.width, 800),
+                height: Math.max(canvasMetrics.height, 560),
                 borderRadius: '20px',
                 border: '1px solid var(--border-color)',
-                overflow: 'hidden',
+                overflow: 'visible',
                 backgroundColor: 'var(--bg-primary)',
                 backgroundImage:
                   'linear-gradient(rgba(100, 116, 139, 0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(100, 116, 139, 0.08) 1px, transparent 1px)',
@@ -835,14 +1056,13 @@ const FloorLayout = ({ tasks = [], config, onNavigate, optimization: sharedOptim
                           fill="none"
                           markerEnd="url(#flowArrow)"
                         />
-                        <motion.path
+                        <path
                           d={connector.path}
                           stroke={isActiveTransfer ? 'var(--accent-warning)' : 'var(--accent-primary)'}
                           strokeWidth={isActiveTransfer ? 4 : 3}
-                          strokeDasharray={isActiveTransfer ? '8 12' : '5 18'}
+                          strokeDasharray={isActiveTransfer ? '8 8' : '6 12'}
                           fill="none"
-                          animate={isPerformanceMode ? {} : { strokeDashoffset: [26, 0] }}
-                          transition={isPerformanceMode ? {} : { repeat: Infinity, ease: 'linear', duration: isActiveTransfer ? 0.7 : 1.6 }}
+                          className={isActiveTransfer ? 'opto-flow-transfer' : 'opto-flow-active'}
                         />
                       </g>
                     );
@@ -919,18 +1139,17 @@ const FloorLayout = ({ tasks = [], config, onNavigate, optimization: sharedOptim
                     whileDrag={{
                       scale: 1.03,
                       boxShadow: '0 24px 45px rgba(13, 148, 136, 0.28)',
-                    }}
-                    onClick={(e) => {
+                    }}                    onClick={(e) => {
                       e.stopPropagation();
                       setSelectedStationIdx(station.idx);
                     }}
                     animate={{
                       left: station.renderX,
                       top: station.renderY,
-                      borderColor: isActive ? 'var(--accent-primary)' : isSelected ? 'var(--accent-warning)' : 'var(--border-color)',
+                      borderColor: clearanceConflicts.has(station.idx) ? 'var(--accent-danger)' : isActive ? 'var(--accent-primary)' : isSelected ? 'var(--accent-warning)' : 'var(--border-color)',
                     }}
                     transition={{ type: 'spring', stiffness: 340, damping: 32 }}
-                    className="glow-card"
+                    className={`glow-card ${clearanceConflicts.has(station.idx) ? 'opto-collision-pulse' : ''}`}
                     style={{
                       position: 'absolute',
                       width: `${STATION_CARD_WIDTH}px`,
@@ -939,15 +1158,53 @@ const FloorLayout = ({ tasks = [], config, onNavigate, optimization: sharedOptim
                       overflow: 'hidden',
                       cursor: isSimulating ? 'default' : draggingStationIdx === station.idx ? 'grabbing' : 'grab',
                       zIndex: draggingStationIdx === station.idx ? 40 : isSelected ? 20 : 10,
-                      boxShadow: isSelected
-                        ? '0 20px 40px rgba(245, 158, 11, 0.16)'
-                        : isActive
-                          ? '0 20px 40px rgba(13, 148, 136, 0.18)'
-                          : 'var(--shadow-glow)',
+                      boxShadow: clearanceConflicts.has(station.idx)
+                        ? '0 0 15px rgba(239, 68, 68, 0.4)'
+                        : isSelected
+                          ? '0 20px 40px rgba(245, 158, 11, 0.16)'
+                          : isActive
+                            ? '0 20px 40px rgba(13, 148, 136, 0.18)'
+                            : 'var(--shadow-glow)',
                     }}
                   >
+                    {/* Safety Clearance Ring (1.2m radius / 100px) */}
                     <div
                       style={{
+                        position: 'absolute',
+                        left: -21,
+                        top: -34,
+                        width: '200px',
+                        height: '200px',
+                        borderRadius: '50%',
+                        border: clearanceConflicts.has(station.idx) ? '2px dashed var(--accent-danger)' : '1px dashed rgba(13, 148, 136, 0.12)',
+                        background: clearanceConflicts.has(station.idx) ? 'rgba(239, 68, 68, 0.04)' : 'rgba(13, 148, 136, 0.01)',
+                        pointerEvents: 'none',
+                        zIndex: 0,
+                        transition: 'border-color 0.2s, background-color 0.2s'
+                      }}
+                    />
+
+                    {/* Technical CAD Watermark Background */}
+                    <div
+                      style={{
+                        position: 'absolute',
+                        right: '-8px',
+                        bottom: '-8px',
+                        width: '68px',
+                        height: '68px',
+                        opacity: 0.08,
+                        pointerEvents: 'none',
+                        zIndex: 0,
+                        transform: 'rotate(-5deg)'
+                      }}
+                    >
+                      {renderMachineSVG(getStationMachineType(station.idx, optimization.stations.length), 'var(--text-white)')}
+                    </div>
+
+                    <div
+                      style={{
+                        position: 'relative',
+                        zIndex: 2,
                         padding: '0.5rem 0.65rem',
                         background:
                           isActive
@@ -970,7 +1227,7 @@ const FloorLayout = ({ tasks = [], config, onNavigate, optimization: sharedOptim
                           {station.role}
                         </div>
                       </div>
-
+ 
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                         {station.isBottleneck && (
                           <div
@@ -987,7 +1244,18 @@ const FloorLayout = ({ tasks = [], config, onNavigate, optimization: sharedOptim
                             BOT
                           </div>
                         )}
-                        <Box size={14} color={isActive ? 'var(--accent-primary)' : 'var(--text-sub)'} />
+                        <div 
+                          style={{ 
+                            width: '16px', 
+                            height: '16px', 
+                            color: isActive ? 'var(--accent-primary)' : 'var(--text-sub)', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center' 
+                          }}
+                        >
+                          {renderMachineSVG(getStationMachineType(station.idx, optimization.stations.length), isActive ? 'var(--accent-primary)' : 'var(--text-sub)')}
+                        </div>
                       </div>
                     </div>
 
@@ -1006,7 +1274,7 @@ const FloorLayout = ({ tasks = [], config, onNavigate, optimization: sharedOptim
                         )}
                       </div>
 
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '0.25rem' }}>
+                      <div className="telemetry-stats-grid" style={{ gap: '0.25rem' }}>
                         {[
                           { label: 'UTIL', value: `${station.utilization.toFixed(0)}%`, icon: Gauge },
                           { label: 'IDLE', value: `${station.idleTime.toFixed(1)}m`, icon: Activity },
@@ -1146,223 +1414,30 @@ const FloorLayout = ({ tasks = [], config, onNavigate, optimization: sharedOptim
                 <RefreshCw size={11} />
                 {(zoom * 100).toFixed(0)}%
               </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); fitAllToView(); }}
+                title="Fit all stations into view"
+                style={{
+                  background: 'var(--accent-primary)',
+                  border: 'none',
+                  color: '#fff',
+                  height: '28px',
+                  padding: '0 0.6rem',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '0.62rem',
+                  fontWeight: 900,
+                  gap: '5px',
+                }}
+              >
+                FIT ALL
+              </button>
             </div>
 
-            {/* Slide-out Detailed Task-List & Gantt Drawer */}
-            <AnimatePresence>
-              {selectedStationIdx !== -1 && canvasMetrics.renderStations[safeSelectedStationIdx] && (() => {
-                const station = canvasMetrics.renderStations[safeSelectedStationIdx];
-                return (
-                  <motion.div
-                    initial={{ x: 340, opacity: 0 }}
-                    animate={{ x: 0, opacity: 1 }}
-                    exit={{ x: 340, opacity: 0 }}
-                    transition={{ type: 'spring', stiffness: 300, damping: 28 }}
-                    style={{
-                      position: 'absolute',
-                      right: '1rem',
-                      top: '1rem',
-                      bottom: '1rem',
-                      width: '320px',
-                      background: 'rgba(15, 23, 42, 0.85)',
-                      backdropFilter: 'blur(16px)',
-                      border: '1px solid var(--border-color)',
-                      borderRadius: 'var(--radius-lg)',
-                      zIndex: 150,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      padding: '1.25rem',
-                      overflowY: 'auto',
-                      boxShadow: '0 20px 50px rgba(0, 0, 0, 0.4)',
-                    }}
-                  >
-                    {/* Header */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-                      <div>
-                        <span style={{ fontSize: '0.58rem', fontWeight: 900, color: 'var(--accent-primary)', letterSpacing: '1px' }}>
-                          STATION TELEMETRY
-                        </span>
-                        <h3 style={{ margin: '0.2rem 0 0', fontSize: '1.05rem', fontWeight: 900, color: 'var(--text-white)', letterSpacing: '0.5px' }}>
-                          STATION {station.idx + 1}
-                        </h3>
-                        <span style={{ fontSize: '0.72rem', color: 'var(--text-sub)' }}>{station.role}</span>
-                      </div>
-                      <button
-                        onClick={() => setSelectedStationIdx(-1)}
-                        style={{
-                          background: 'var(--bg-secondary)',
-                          border: '1px solid var(--border-color)',
-                          borderRadius: 'var(--radius-sm)',
-                          padding: '0.35rem',
-                          color: 'var(--text-white)',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
-                      >
-                        <X size={15} />
-                      </button>
-                    </div>
 
-                    {/* Stats overview cards */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1.25rem' }}>
-                      <div style={{ background: 'var(--bg-secondary)', padding: '0.65rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.6rem', fontWeight: 900, color: 'var(--text-sub)' }}>
-                          <Gauge size={12} />
-                          UTILIZATION
-                        </div>
-                        <div style={{ marginTop: '0.25rem', fontSize: '1.1rem', fontWeight: 900, color: station.utilization > 95 ? 'var(--accent-warning)' : 'var(--accent-primary)' }}>
-                          {station.utilization.toFixed(1)}%
-                        </div>
-                      </div>
-                      <div style={{ background: 'var(--bg-secondary)', padding: '0.65rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.6rem', fontWeight: 900, color: 'var(--text-sub)' }}>
-                          <Clock size={12} />
-                          CYCLE TIME
-                        </div>
-                        <div style={{ marginTop: '0.25rem', fontSize: '1.1rem', fontWeight: 900, color: 'var(--text-white)' }}>
-                          {station.time.toFixed(2)}m
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Gantt Overlay */}
-                    <div style={{ marginBottom: '1.5rem' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.45rem' }}>
-                        <span style={{ fontSize: '0.65rem', fontWeight: 900, color: 'var(--text-sub)' }}>CYCLE TIME GANTT VS TAKT TIME</span>
-                        <span style={{ fontSize: '0.65rem', fontWeight: 900, color: 'var(--text-white)' }}>
-                          Takt: {taktTime.toFixed(1)}m
-                        </span>
-                      </div>
-                      <div
-                        style={{
-                          height: '24px',
-                          borderRadius: 'var(--radius-sm)',
-                          background: 'var(--bg-tertiary)',
-                          border: '1px solid var(--border-color)',
-                          overflow: 'hidden',
-                          position: 'relative',
-                          display: 'flex',
-                        }}
-                      >
-                        {/* Render sequential task blocks inside the bar */}
-                        {station.tasks.map((task, i) => {
-                          const widthPercent = (task.time / Math.max(taktTime, station.time)) * 100;
-                          const colors = [
-                            'rgba(13, 148, 136, 0.45)', // teal
-                            'rgba(168, 85, 247, 0.45)', // purple
-                            'rgba(245, 158, 11, 0.45)', // amber
-                            'rgba(6, 182, 212, 0.45)',  // cyan
-                            'rgba(239, 68, 68, 0.45)',  // red
-                          ];
-                          const borderColors = [
-                            'var(--accent-primary)',
-                            '#a855f7',
-                            'var(--accent-warning)',
-                            '#06b6d4',
-                            'var(--accent-danger)',
-                          ];
-                          const bg = colors[i % colors.length];
-                          const border = borderColors[i % borderColors.length];
-
-                          return (
-                            <div
-                              key={task.id}
-                              title={`${task.name}: ${task.time.toFixed(1)}m`}
-                              style={{
-                                width: `${widthPercent}%`,
-                                height: '100%',
-                                background: bg,
-                                borderRight: '1px solid rgba(255, 255, 255, 0.1)',
-                                borderBottom: `2px solid ${border}`,
-                                position: 'relative',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontSize: '0.52rem',
-                                fontWeight: 900,
-                                color: 'var(--text-white)',
-                              }}
-                            >
-                              {task.id}
-                            </div>
-                          );
-                        })}
-
-                        {/* Takt Time Limit Line */}
-                        {taktTime > 0 && taktTime >= station.time && (
-                          <div
-                            style={{
-                              position: 'absolute',
-                              left: `${(taktTime / Math.max(taktTime, station.time)) * 100}%`,
-                              top: 0,
-                              bottom: 0,
-                              width: '2px',
-                              background: 'rgba(239, 68, 68, 0.7)',
-                              borderLeft: '1px dashed #ef4444',
-                              zIndex: 10,
-                              pointerEvents: 'none',
-                            }}
-                          />
-                        )}
-                      </div>
-                      {station.time > taktTime && (
-                        <div style={{ marginTop: '0.45rem', display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--accent-danger)', fontSize: '0.64rem', fontWeight: 800 }}>
-                          <AlertTriangle size={12} />
-                          <span>Bottleneck: Load exceeds Takt Time!</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Detailed Tasks Roster */}
-                    <div>
-                      <div style={{ fontSize: '0.68rem', fontWeight: 900, color: 'var(--text-sub)', letterSpacing: '0.8px', marginBottom: '0.75rem' }}>
-                        ASSIGNED PROCESS TASKS ({station.tasks.length})
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                        {station.tasks.map((task) => (
-                          <div
-                            key={task.id}
-                            style={{
-                              background: 'var(--bg-secondary)',
-                              border: '1px solid var(--border-color)',
-                              borderRadius: 'var(--radius-md)',
-                              padding: '0.8rem',
-                            }}
-                          >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', marginBottom: '0.4rem' }}>
-                              <span style={{ fontSize: '0.72rem', fontWeight: 900, color: 'var(--text-white)' }}>
-                                <span style={{ color: 'var(--accent-primary)', marginRight: '6px' }}>{task.id}</span>
-                                {task.name}
-                              </span>
-                              <span style={{ fontSize: '0.65rem', fontWeight: 900, color: 'var(--text-sub)' }}>
-                                {task.time.toFixed(1)}m
-                              </span>
-                            </div>
-                            <p style={{ margin: 0, fontSize: '0.64rem', color: 'var(--text-main)', lineHeight: 1.45, marginBottom: '0.4rem' }}>
-                              {task.desc || 'No process description provided.'}
-                            </p>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.45rem', fontSize: '0.52rem', fontWeight: 900 }}>
-                              {task.predecessors && task.predecessors.length > 0 && task.predecessors[0] !== 'None' && (
-                                <span style={{ background: 'var(--card-bg)', border: '1px solid var(--border-color)', padding: '0.2rem 0.4rem', borderRadius: '4px', color: 'var(--text-sub)' }}>
-                                  PREREQ: {task.predecessors.join(', ')}
-                                </span>
-                              )}
-                              {task.zoning && (
-                                <span style={{ background: 'rgba(168, 85, 247, 0.1)', border: '1px solid rgba(168, 85, 247, 0.3)', padding: '0.2rem 0.4rem', borderRadius: '4px', color: '#a855f7' }}>
-                                  ZONE: {task.zoning}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </motion.div>
-                );
-              })()}
-            </AnimatePresence>
           </div>
 
 

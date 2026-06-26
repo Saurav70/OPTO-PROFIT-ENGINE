@@ -1,4 +1,4 @@
-# OPTO-PROFIT: Industrial Engineering Engine
+ # OPTO-PROFIT: Industrial Engineering Engine
 
 OPTO-PROFIT is a specialized full-stack toolkit designed for industrial engineers to optimize assembly lines, floor layouts, and financial performance.
 

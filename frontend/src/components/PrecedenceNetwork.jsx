@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import '@xyflow/react/dist/style.css';
 import { 
   ReactFlow, 
   Background, 
@@ -227,8 +228,6 @@ const PrecedenceNetwork = ({ tasks = [], onNavigate }) => {
     >
       <div style={{ padding: '1.5rem 2rem 0 2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-
-          <h2 className="header-title" style={{ margin: 0, fontSize: '1.4rem', color: 'var(--text-white)' }}>PRECEDENCE NETWORK</h2>
         </div>
       </div>
 

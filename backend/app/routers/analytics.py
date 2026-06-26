@@ -4,6 +4,11 @@ import operator
 from fastapi import APIRouter, Depends, Header, HTTPException
 from typing import Dict, Any
 from datetime import timezone
+from sqlalchemy.orm import Session
+
+from ..database import get_db
+from ..sql_models import SessionDB, UserDB
+from ..auth import hash_token, utc_now, decode_access_token
 
 router = APIRouter(prefix="/api/analytics", tags=["Analytics"])
 
@@ -111,33 +116,42 @@ def evaluate_formula(formula: str | None, context: Dict[str, float]) -> float:
         parsed = ast.parse(_normalize_formula(formula), mode="eval")
         result = _eval_node(parsed, context)
         return float(result) if isinstance(result, (int, float, bool)) else 0
-    except Exception:
-        return 0
+    except ZeroDivisionError as e:
+        logger.error("Formula evaluation failed due to division by zero: %s (Context: %s)", formula, context)
+        raise ValueError(f"Mathematical Error: Division by zero in formula '{formula}'.")
+    except NameError as e:
+        logger.error("Formula evaluation failed due to undefined name: %s (Context: %s)", formula, context)
+        raise ValueError(f"Scope Error: Undefined variable or variable name in formula '{formula}'.")
+    except Exception as e:
+        logger.error("Formula evaluation failed (syntax or semantic error): %s (Context: %s). Details: %s", formula, context, e)
+        raise ValueError(f"Syntax/Semantic Error: Invalid formula expression '{formula}'. Details: {e}")
 
-# ── Auth dependency (uses shared auth module — P0-5 fix) ──
-async def _require_user_for_analytics(authorization: str | None = Header(default=None)) -> dict:
+# ── Auth dependency (uses SQLAlchemy session) ──
+def _require_user_for_analytics(authorization: str | None = Header(default=None), db: Session = Depends(get_db)) -> dict:
     """Lightweight auth guard for the analytics router."""
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing or invalid authorization header")
-    from ..auth import hash_token, utc_now
-    from ..main import app as main_app
     token = authorization.split(" ", 1)[1].strip()
     if not token:
         raise HTTPException(status_code=401, detail="Invalid token")
-    token_hash = hash_token(token)
-    session = await main_app.database["sessions"].find_one({"token_hash": token_hash})
+    
+    payload = decode_access_token(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid token or token expired")
+    
+    is_2fa_temp = payload.get("is_2fa_temp", False)
+    if is_2fa_temp:
+        raise HTTPException(status_code=401, detail="2FA verification required")
+
+    token_hash_val = hash_token(token)
+    session = db.query(SessionDB).filter(SessionDB.token_hash == token_hash_val).first()
     if not session:
         raise HTTPException(status_code=401, detail="Session not found")
-    expires_at = session.get("expires_at")
-    if expires_at and expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
-    if not expires_at or expires_at < utc_now():
-        raise HTTPException(status_code=401, detail="Session expired")
-    return session
+    return {"user_id": session.user_id}
 
 
 @router.post("/roi")
-async def get_roi_impact(payload: Dict[str, Any], _user: dict = Depends(_require_user_for_analytics)):
+def get_roi_impact(payload: Dict[str, Any], _user: dict = Depends(_require_user_for_analytics)):
     """
     Dynamic ROI calculation aligned to the frontend variable/formula model.
     """
@@ -166,13 +180,13 @@ async def get_roi_impact(payload: Dict[str, Any], _user: dict = Depends(_require
     contribution_margin = unit_price - unit_cost
     labor_hours_per_day = shift_time / 60 if shift_time > 0 else 0
 
-    def daily_output(cycle_time: float) -> float:
+    def calculate_daily_production(cycle_time: float) -> float:
         if shift_time <= 0 or cycle_time <= 0 or demand <= 0:
             return 0
         return min(demand, int((shift_time / cycle_time) + 1e-9))
 
-    baseline_daily_production = daily_output(current_cycle_time)
-    optimized_daily_production = daily_output(optimized_cycle_time)
+    baseline_daily_production = calculate_daily_production(current_cycle_time)
+    optimized_daily_production = calculate_daily_production(optimized_cycle_time)
     baseline_labor_cost = current_operators * operator_cost_per_hour * labor_hours_per_day * work_days
     optimized_labor_cost = optimized_operators * operator_cost_per_hour * labor_hours_per_day * work_days
     baseline_monthly_profit = (baseline_daily_production * work_days * contribution_margin) - baseline_labor_cost

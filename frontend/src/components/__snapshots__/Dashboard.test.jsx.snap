@@ -1,0 +1,1062 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Dashboard Component > snapshot: Dashboard structure matches baseline 1`] = `
+<div>
+  <div
+    style="display: flex; flex-direction: column; height: 100%; background: var(--bg-main); border-radius: var(--radius-lg); overflow: hidden; border: 1px solid var(--border-color); transition: var(--transition-smooth);"
+  >
+    <div
+      class="responsive-header"
+      style="padding: 1.5rem 2rem 0px;"
+    >
+      <div>
+        <h2
+          class="header-title"
+          style="margin: 0px; font-size: 1.4rem; color: var(--text-white);"
+        >
+          PRODUCTION DASHBOARD
+        </h2>
+      </div>
+    </div>
+    <div
+      style="padding: 2rem; display: flex; flex-direction: column; gap: 2rem; overflow-y: auto;"
+    >
+      <div
+        class="kpi-grid-5"
+      >
+        <div
+          class="glow-card"
+          style="padding: 1.2rem; border-left: 4px solid var(--accent-primary); display: flex; flex-direction: column; gap: 8px; position: relative;"
+        >
+          <div
+            style="display: flex; align-items: center; justify-content: space-between;"
+          >
+            <div
+              style="display: flex; align-items: center; gap: 8px;"
+            >
+              <span
+                style="font-size: 0.65rem; font-weight: 900; color: var(--text-sub); letter-spacing: 1px;"
+              >
+                LINE EFFICIENCY
+              </span>
+            </div>
+          </div>
+          <div
+            style="display: flex; align-items: baseline; gap: 8px;"
+          >
+            <span
+              class="kpi-value"
+            >
+              83.33%
+            </span>
+          </div>
+        </div>
+        <div
+          class="glow-card"
+          style="padding: 1.2rem; border-left: 4px solid rgb(8, 145, 178); display: flex; flex-direction: column; gap: 8px; position: relative;"
+        >
+          <div
+            style="display: flex; align-items: center; justify-content: space-between;"
+          >
+            <div
+              style="display: flex; align-items: center; gap: 8px;"
+            >
+              <span
+                style="font-size: 0.65rem; font-weight: 900; color: var(--text-sub); letter-spacing: 1px;"
+              >
+                WORK STATIONS
+              </span>
+            </div>
+          </div>
+          <div
+            style="display: flex; align-items: baseline; gap: 8px;"
+          >
+            <span
+              class="kpi-value"
+            >
+              3
+            </span>
+            <span
+              style="font-size: 0.8rem; color: var(--text-sub); font-weight: 600;"
+            >
+              / 3 Target
+            </span>
+          </div>
+        </div>
+        <div
+          class="glow-card"
+          style="padding: 1.2rem; border-left: 4px solid var(--accent-secondary); display: flex; flex-direction: column; gap: 8px; position: relative;"
+        >
+          <div
+            style="display: flex; align-items: center; justify-content: space-between;"
+          >
+            <div
+              style="display: flex; align-items: center; gap: 8px;"
+            >
+              <span
+                style="font-size: 0.65rem; font-weight: 900; color: var(--text-sub); letter-spacing: 1px;"
+              >
+                BOTTLE-NECK TIME
+              </span>
+            </div>
+          </div>
+          <div
+            style="display: flex; align-items: baseline; gap: 8px;"
+          >
+            <span
+              class="kpi-value"
+            >
+              30m
+            </span>
+          </div>
+        </div>
+        <div
+          class="glow-card"
+          style="padding: 1.2rem; border-left: 4px solid rgb(124, 58, 237); display: flex; flex-direction: column; gap: 8px; position: relative;"
+        >
+          <div
+            style="display: flex; align-items: center; justify-content: space-between;"
+          >
+            <div
+              style="display: flex; align-items: center; gap: 8px;"
+            >
+              <span
+                style="font-size: 0.65rem; font-weight: 900; color: var(--text-sub); letter-spacing: 1px;"
+              >
+                TOTAL PROCESS TIME
+              </span>
+            </div>
+          </div>
+          <div
+            style="display: flex; align-items: baseline; gap: 8px;"
+          >
+            <span
+              class="kpi-value"
+            >
+              75m
+            </span>
+          </div>
+        </div>
+        <div
+          class="glow-card"
+          style="padding: 1.2rem; border-left: 4px solid var(--accent-warning); display: flex; flex-direction: column; gap: 8px; position: relative;"
+        >
+          <div
+            style="display: flex; align-items: center; justify-content: space-between;"
+          >
+            <div
+              style="display: flex; align-items: center; gap: 8px;"
+            >
+              <span
+                style="font-size: 0.65rem; font-weight: 900; color: var(--text-sub); letter-spacing: 1px;"
+              >
+                BALANCE DELAY
+              </span>
+            </div>
+          </div>
+          <div
+            style="display: flex; align-items: baseline; gap: 8px;"
+          >
+            <span
+              class="kpi-value"
+            >
+              16.67%
+            </span>
+          </div>
+        </div>
+      </div>
+      <div
+        class="grid-2fr-1fr"
+      >
+        <div
+          class="glow-card"
+          id="dashboard-gauge-card"
+          style="display: flex; flex-direction: column;"
+        >
+          <div
+            class="responsive-header"
+            style="padding: 1.2rem 1.5rem; background: var(--bg-secondary); border-bottom: 1px solid var(--border-color);"
+          >
+            <div>
+              <h3
+                class="header-title"
+                style="margin: 0px; font-size: 1.1rem; color: var(--text-white);"
+              >
+                CORE PERFORMANCE ANALYTICS
+              </h3>
+              <p
+                style="margin: 0px; font-size: 0.75rem; color: var(--text-sub); font-weight: 600;"
+              >
+                Theoretical Balance Index vs. Actual Factory Simulation
+              </p>
+            </div>
+            <button
+              class="no-print btn-primary"
+              style="padding: 0.6rem 1.2rem; font-size: 0.75rem;"
+            >
+              OPEN OPTIMIZER
+            </button>
+          </div>
+          <div
+            class="gauge-panel"
+          >
+            <div
+              class="gauge-svg-container"
+            >
+              <svg
+                height="200"
+                viewBox="0 0 200 200"
+                width="200"
+              >
+                <circle
+                  cx="100"
+                  cy="100"
+                  fill="none"
+                  r="90"
+                  stroke="var(--bg-tertiary)"
+                  stroke-width="12"
+                />
+                <circle
+                  cx="100"
+                  cy="100"
+                  fill="none"
+                  r="90"
+                  stroke="var(--accent-primary)"
+                  stroke-linecap="round"
+                  stroke-width="12"
+                  transform="rotate(-90 100 100)"
+                />
+                <circle
+                  cx="100"
+                  cy="100"
+                  fill="none"
+                  r="75"
+                  stroke="var(--border-color)"
+                  stroke-dasharray="4 4"
+                  stroke-width="1"
+                />
+              </svg>
+              <div
+                style="position: absolute; inset: 0px; display: flex; flex-direction: column; align-items: center; justify-content: center;"
+              >
+                <span
+                  style="font-size: 0.75rem; font-weight: 900; color: var(--text-sub); letter-spacing: 1px;"
+                >
+                  RATING
+                </span>
+                <span
+                  class="gauge-value"
+                  style="color: var(--accent-primary);"
+                >
+                  83
+                  <sub
+                    style="font-size: 1rem; bottom: 0.2rem;"
+                  >
+                    %
+                  </sub>
+                </span>
+                <span
+                  style="font-size: 0.65rem; font-weight: 700; background: var(--accent-primary)20; color: var(--accent-primary); padding: 2px 8px; border-radius: 10px; margin-top: 5px;"
+                >
+                  OPTIMAL
+                </span>
+              </div>
+            </div>
+            <div
+              class="responsive-gauge-stats"
+            >
+              <div>
+                <h6
+                  style="margin: 0px 0px 6px; font-size: 0.75rem; color: var(--text-sub); font-weight: 900; letter-spacing: 1px;"
+                >
+                  OPTIMIZED TAKT
+                </h6>
+                <p
+                  style="margin: 0px; font-size: 1.6rem; font-weight: 900; color: var(--text-white);"
+                >
+                  0.0
+                   
+                  <sub
+                    style="font-size: 0.8rem; color: var(--text-sub);"
+                  >
+                    min
+                  </sub>
+                </p>
+              </div>
+              <div>
+                <h6
+                  style="margin: 0px 0px 6px; font-size: 0.75rem; color: var(--text-sub); font-weight: 900; letter-spacing: 1px;"
+                >
+                  IDLE TIME LOSS
+                </h6>
+                <p
+                  style="margin: 0px; font-size: 1.6rem; font-weight: 900; color: var(--accent-danger);"
+                >
+                  15
+                   
+                  <sub
+                    style="font-size: 0.8rem; color: var(--text-sub);"
+                  >
+                    min
+                  </sub>
+                </p>
+              </div>
+              <div>
+                <h6
+                  style="margin: 0px 0px 6px; font-size: 0.75rem; color: var(--text-sub); font-weight: 900; letter-spacing: 1px;"
+                >
+                  SMOOTHNESS IDX
+                </h6>
+                <p
+                  style="margin: 0px; font-size: 1.6rem; font-weight: 900; color: var(--accent-secondary);"
+                >
+                  5.77
+                   
+                  <sub
+                    style="font-size: 0.8rem; color: var(--text-sub);"
+                  >
+                    coef
+                  </sub>
+                </p>
+              </div>
+              <div>
+                <h6
+                  style="margin: 0px 0px 6px; font-size: 0.75rem; color: var(--text-sub); font-weight: 900; letter-spacing: 1px;"
+                >
+                  CRITICAL PATH
+                </h6>
+                <p
+                  style="margin: 0px; font-size: 1.6rem; font-weight: 900; color: var(--accent-warning);"
+                >
+                  STATION 
+                  2
+                </p>
+              </div>
+            </div>
+          </div>
+          <div
+            class="dashboard-footer-bar responsive-footer-bar"
+          >
+            <div
+              class="dashboard-footer-inner"
+            >
+              <div
+                style="display: flex; flex-direction: column; gap: 2px;"
+              >
+                <span
+                  style="font-size: 0.6rem; font-weight: 900; color: var(--text-sub); letter-spacing: 1px;"
+                >
+                  ROI LIFT / MONTH
+                </span>
+                <span
+                  style="font-size: 1rem; font-weight: 900; color: var(--accent-primary);"
+                >
+                  +
+                  ₹0
+                </span>
+              </div>
+              <div
+                style="display: flex; flex-direction: column; gap: 2px;"
+              >
+                <span
+                  style="font-size: 0.6rem; font-weight: 900; color: var(--text-sub); letter-spacing: 1px;"
+                >
+                  DAILY OUTPUT
+                </span>
+                <span
+                  style="font-size: 1rem; font-weight: 900; color: var(--text-white);"
+                >
+                  0
+                   
+                  <sub
+                    style="font-size: 0.65rem; color: var(--text-sub);"
+                  >
+                    units
+                  </sub>
+                </span>
+              </div>
+            </div>
+            <div
+              class="dashboard-footer-actions"
+            >
+              <button
+                style="background: transparent; border: medium; color: var(--accent-primary); font-size: 0.7rem; font-weight: 900; cursor: pointer; display: flex; align-items: center; gap: 4px; letter-spacing: 1px;"
+              >
+                FULL ROI REPORT 
+              </button>
+            </div>
+          </div>
+        </div>
+        <div
+          style="background: var(--sidebar-bg); border-radius: var(--radius-lg); padding: 1.5rem; color: rgb(255, 255, 255); display: flex; flex-direction: column; gap: 1.5rem; position: relative; overflow: hidden; transition: var(--transition-smooth); border: 1px solid var(--border-color);"
+        >
+          <div
+            style="position: absolute; top: -20px; right: -20px; opacity: 0.1;"
+          />
+          <div
+            style="border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 1rem; z-index: 1;"
+          >
+            <h3
+              class="header-title"
+              style="margin: 0px; font-size: 1rem; color: var(--accent-primary);"
+            >
+              PROJECT PROFILES
+            </h3>
+            <p
+              style="margin: 4px 0px 0px; font-size: 0.7rem; color: rgba(255, 255, 255, 0.5); font-weight: 600;"
+            >
+              Switch between stored configurations
+            </p>
+          </div>
+          <button
+            class="btn-outline"
+            style="padding: 0.7rem 0.9rem; font-size: 0.68rem; border-color: var(--accent-primary); color: var(--accent-primary); z-index: 1; display: flex; align-items: center; justify-content: center; gap: 8px;"
+          >
+             LOAD OSCILLOSCOPE SAMPLE
+          </button>
+          <div
+            style="display: flex; flex-direction: column; gap: 0.8rem; flex: 1 1 0%; overflow-y: auto; max-height: 250px; z-index: 1;"
+          >
+            <div
+              style="padding: 2rem 1rem; text-align: center; background: rgba(255, 255, 255, 0.03); border-radius: var(--radius-md); border: 1px dashed rgba(255, 255, 255, 0.1);"
+            >
+              <p
+                style="font-size: 0.7rem; color: rgba(255, 255, 255, 0.4); margin: 0px;"
+              >
+                No saved projects yet
+              </p>
+            </div>
+          </div>
+          <div
+            style="margin-top: auto; display: flex; gap: 8px; z-index: 1;"
+          >
+            <input
+              placeholder="New Profile Name..."
+              style="flex: 1 1 0%; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: var(--radius-sm); padding: 0.6rem; color: rgb(255, 255, 255); font-size: 0.75rem; outline: none;"
+              value=""
+            />
+            <button
+              class="btn-primary"
+              style="padding: 0.6rem;"
+            />
+          </div>
+        </div>
+      </div>
+      <div
+        class="no-print"
+        style="border-top: 2px solid var(--border-color); padding-top: 2rem;"
+      >
+        <div
+          class="responsive-header"
+          style="margin-bottom: 1.2rem;"
+        >
+          <h3
+            class="header-title"
+            style="margin: 0px; font-size: 0.85rem; color: var(--text-sub);"
+          >
+            SYSTEM MODULES & CONFIGURATION
+          </h3>
+          <button
+            class="btn-primary"
+            style="padding: 0.5rem 1rem; font-size: 0.7rem; background: var(--accent-primary);"
+          >
+            OPEN CONFIGURATION ENGINE
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`LineOptimization Component > snapshot: LineOptimization structure matches baseline 1`] = `
+<div>
+  <div
+    style="display: flex; flex-direction: column; height: 100%; background: var(--bg-main); border-radius: var(--radius-lg); overflow: hidden; border: 1px solid var(--border-color); transition: var(--transition-smooth);"
+  >
+    <header
+      style="padding: 1.5rem 2rem 1.25rem; display: flex; justify-content: space-between; align-items: center; background: var(--bg-secondary); border-bottom: 1px solid var(--border-color); flex-wrap: wrap; gap: 1rem;"
+    >
+      <div />
+      <div
+        style="display: flex; align-items: center; gap: 12px; position: relative;"
+      >
+        <button
+          aria-label="Capture current simulation parameters as comparative baseline"
+          class="btn-primary"
+          style="display: flex; align-items: center; gap: 8px; padding: 0.6rem 1.2rem; font-size: 0.75rem; font-weight: 900; cursor: pointer; box-shadow: var(--shadow-glow);"
+        >
+           SET BASELINE SNAPSHOT
+        </button>
+      </div>
+    </header>
+    <div
+      class="bottom-sheet-backdrop "
+    />
+    <div
+      style="padding: 1.5rem; overflow-y: auto; flex: 1 1 0%; display: flex; flex-direction: column; gap: 1.5rem;"
+    >
+      <div
+        role="alert"
+        style="background: rgba(245, 158, 11, 0.08); border: 1px solid var(--accent-warning); border-radius: var(--radius-md); padding: 1rem 1.25rem; display: flex; gap: 12px; align-items: flex-start;"
+      >
+        <div>
+          <h4
+            style="margin: 0px; font-size: 0.8rem; font-weight: 900; color: var(--text-white); letter-spacing: 0.5px;"
+          >
+            NO BASELINE SNAPSHOT RECORDED
+          </h4>
+          <p
+            style="margin: 4px 0px 0px; font-size: 0.74rem; color: var(--text-sub); line-height: 1.4;"
+          >
+            Establish a benchmark reference by adjusting the simulation parameters in the interactive right-hand column and clicking the 
+            <strong>
+              Set Baseline Snapshot
+            </strong>
+             button. This will enable side-by-side performance delta diagnostics.
+          </p>
+        </div>
+      </div>
+      <section
+        aria-label="Comparative performance KPIs"
+        class="kpi-grid"
+      >
+        <div
+          class="glow-card"
+          style="padding: 1.25rem;"
+        >
+          <div
+            style="display: flex; justify-content: space-between; align-items: center; color: var(--text-sub);"
+          >
+            <span
+              style="font-size: 0.72rem; font-weight: 900; letter-spacing: 0.5px;"
+            >
+              LINE EFFICIENCY
+            </span>
+          </div>
+          <div
+            style="margin-top: 0.45rem; display: flex; align-items: baseline; flex-wrap: wrap;"
+          >
+            <span
+              style="font-size: 1.8rem; font-weight: 900; color: var(--text-white);"
+            >
+              83.33
+              %
+            </span>
+          </div>
+          <span
+            style="font-size: 0.6rem; color: var(--text-sub); display: block; margin-top: 4px;"
+          >
+            Target: 
+            85
+            %
+          </span>
+        </div>
+        <div
+          class="glow-card"
+          style="padding: 1.25rem;"
+        >
+          <div
+            style="display: flex; justify-content: space-between; align-items: center; color: var(--text-sub);"
+          >
+            <span
+              style="font-size: 0.72rem; font-weight: 900; letter-spacing: 0.5px;"
+            >
+              WORKSTATIONS USED
+            </span>
+          </div>
+          <div
+            style="margin-top: 0.45rem; display: flex; align-items: baseline; flex-wrap: wrap;"
+          >
+            <span
+              style="font-size: 1.8rem; font-weight: 900; color: var(--accent-secondary);"
+            >
+              3
+            </span>
+          </div>
+          <span
+            style="font-size: 0.6rem; color: var(--text-sub); display: block; margin-top: 4px;"
+          >
+            Theoretical Min: 
+            Infinity
+          </span>
+        </div>
+        <div
+          class="glow-card"
+          style="padding: 1.25rem;"
+        >
+          <div
+            style="display: flex; justify-content: space-between; align-items: center; color: var(--text-sub);"
+          >
+            <span
+              style="font-size: 0.72rem; font-weight: 900; letter-spacing: 0.5px;"
+            >
+              ACTUAL CYCLE TIME
+            </span>
+          </div>
+          <div
+            style="margin-top: 0.45rem; display: flex; align-items: baseline; flex-wrap: wrap;"
+          >
+            <span
+              style="font-size: 1.8rem; font-weight: 900; color: var(--text-white);"
+            >
+              30.0
+              m
+            </span>
+          </div>
+          <span
+            style="font-size: 0.6rem; color: var(--text-sub); display: block; margin-top: 4px;"
+          >
+            Takt Limit: 
+            0.0
+             min
+          </span>
+        </div>
+        <div
+          class="glow-card"
+          style="padding: 1.25rem;"
+        >
+          <div
+            style="display: flex; justify-content: space-between; align-items: center; color: var(--text-sub);"
+          >
+            <span
+              style="font-size: 0.72rem; font-weight: 900; letter-spacing: 0.5px;"
+            >
+              LABOUR PRODUCTIVITY
+            </span>
+          </div>
+          <div
+            style="margin-top: 0.45rem; display: flex; align-items: baseline; flex-wrap: wrap;"
+          >
+            <span
+              style="font-size: 1.8rem; font-weight: 900; color: var(--text-white);"
+            >
+              0.0
+              %
+            </span>
+          </div>
+          <span
+            style="font-size: 0.6rem; color: var(--text-sub); display: block; margin-top: 4px;"
+          >
+            N_op = 
+            1
+             operators
+          </span>
+        </div>
+      </section>
+      <div
+        class="module-split-layout"
+      >
+        <section
+          aria-label="Baseline scenario details"
+          style="flex: 1 1 0%; border: 1px dashed var(--border-color); border-radius: var(--radius-lg); background: var(--bg-secondary); padding: 1.5rem; display: flex; flex-direction: column; gap: 1.25rem; opacity: 0.65; transition: opacity 0.3s;"
+        >
+          <div
+            style="display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem;"
+          >
+            <h3
+              style="margin: 0px; font-size: 0.85rem; font-weight: 900; color: var(--text-white); letter-spacing: 1px;"
+            >
+              BASELINE SCENARIO (READ-ONLY)
+            </h3>
+          </div>
+          <div
+            style="flex: 1 1 0%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 3rem 1.5rem; text-align: center;"
+          >
+            <h4
+              style="margin: 0px; font-size: 0.8rem; font-weight: 900; color: var(--text-white);"
+            >
+              NO BASELINE DATA
+            </h4>
+            <p
+              style="margin: 4px 0px 0px; font-size: 0.7rem; color: var(--text-sub); line-height: 1.4;"
+            >
+              Establish a baseline snaphot to unlock comparative diagnostics.
+            </p>
+          </div>
+        </section>
+        <section
+          aria-label="Simulation controls and results"
+          style="flex: 1 1 0%; border: 1px solid var(--border-color); border-radius: var(--radius-lg); background: var(--card-bg); padding: 1.5rem; display: flex; flex-direction: column; gap: 1.25rem; box-shadow: var(--shadow-glow);"
+        >
+          <div
+            style="display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem;"
+          >
+            <h3
+              style="margin: 0px; font-size: 0.85rem; font-weight: 900; color: var(--text-white); letter-spacing: 1px;"
+            >
+              SIMULATION SANDBOX (ACTIVE)
+            </h3>
+          </div>
+          <div
+            class="bottom-sheet-drawer "
+            style="background: var(--bg-secondary); padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 1rem;"
+          >
+            <div
+              class="mobile-drawer-header"
+              style="display: flex; justify-content: space-between; align-items: center; width: 100%;"
+            >
+              <h4
+                style="margin: 0px; font-size: 0.75rem; font-weight: 900; color: var(--text-white);"
+              >
+                ADJUST SIMULATION PARAMETERS
+              </h4>
+              <button
+                aria-label="Close parameters drawer"
+                class="drawer-close-x-btn"
+              >
+                ✕
+              </button>
+            </div>
+            <div>
+              <label
+                for="sim-heuristic"
+                style="font-size: 0.65rem; font-weight: 900; color: var(--text-sub); letter-spacing: 0.5px; display: block; margin-bottom: 6px;"
+              >
+                BALANCING ALGORITHM
+              </label>
+              <select
+                aria-label="Select heuristic line balancing algorithm"
+                class="industrial-input"
+                id="sim-heuristic"
+                style="width: 100%;"
+              >
+                <option
+                  value="LTF"
+                >
+                  Longest Task First (LTF)
+                </option>
+                <option
+                  value="MFT"
+                >
+                  Most Following Tasks (MFT)
+                </option>
+                <option
+                  value="RPW"
+                >
+                  Ranked Positional Weight (RPW)
+                </option>
+              </select>
+            </div>
+            <div>
+              <div
+                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;"
+              >
+                <label
+                  for="sim-cycle-time"
+                  style="font-size: 0.65rem; font-weight: 900; color: var(--text-sub); letter-spacing: 0.5px;"
+                >
+                  TARGET CYCLE TIME (MIN)
+                </label>
+                <span
+                  style="font-size: 0.75rem; font-weight: 900; color: var(--accent-primary);"
+                >
+                  0.0
+                   min
+                </span>
+              </div>
+              <div
+                style="display: flex; gap: 12px; align-items: center;"
+              >
+                <input
+                  aria-label="Target cycle time slider"
+                  id="sim-cycle-time-slider"
+                  max="30"
+                  min="0.5"
+                  step="0.5"
+                  style="flex: 1 1 0%; accent-color: var(--accent-primary);"
+                  type="range"
+                  value="0"
+                />
+                <input
+                  aria-label="Target cycle time input value"
+                  class="industrial-input"
+                  id="sim-cycle-time"
+                  max="100"
+                  min="0.1"
+                  step="0.1"
+                  style="width: 70px; text-align: center;"
+                  type="number"
+                  value="0"
+                />
+              </div>
+            </div>
+            <div>
+              <div
+                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;"
+              >
+                <label
+                  for="sim-efficiency"
+                  style="font-size: 0.65rem; font-weight: 900; color: var(--text-sub); letter-spacing: 0.5px;"
+                >
+                  TARGET EFFICIENCY (%)
+                </label>
+                <span
+                  style="font-size: 0.75rem; font-weight: 900; color: var(--accent-secondary);"
+                >
+                  85
+                  %
+                </span>
+              </div>
+              <div
+                style="display: flex; gap: 12px; align-items: center;"
+              >
+                <input
+                  aria-label="Target efficiency percentage slider"
+                  id="sim-efficiency-slider"
+                  max="100"
+                  min="50"
+                  step="1"
+                  style="flex: 1 1 0%; accent-color: var(--accent-secondary);"
+                  type="range"
+                  value="85"
+                />
+                <input
+                  aria-label="Target efficiency percentage input value"
+                  class="industrial-input"
+                  id="sim-efficiency"
+                  max="100"
+                  min="10"
+                  style="width: 70px; text-align: center;"
+                  type="number"
+                  value="85"
+                />
+              </div>
+            </div>
+            <div>
+              <label
+                for="sim-operators"
+                style="font-size: 0.65rem; font-weight: 900; color: var(--text-sub); letter-spacing: 0.5px; display: block; margin-bottom: 6px;"
+              >
+                ACTIVE OPERATORS (N_op)
+              </label>
+              <input
+                aria-label="Number of line operators"
+                class="industrial-input"
+                id="sim-operators"
+                max="50"
+                min="1"
+                step="1"
+                style="width: 100%;"
+                type="number"
+                value="1"
+              />
+            </div>
+          </div>
+          <div
+            style="display: flex; flex-direction: column; gap: 0.85rem;"
+          >
+            <h4
+              style="margin: 0px; font-size: 0.75rem; font-weight: 900; color: var(--text-white); letter-spacing: 0.5px;"
+            >
+              LIVE ALLOCATIONS
+            </h4>
+            <div
+              style="padding: 1rem; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-secondary); box-shadow: 0 2px 8px rgba(0,0,0,0.05);"
+            >
+              <div
+                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.4rem;"
+              >
+                <span
+                  style="font-size: 0.75rem; font-weight: 900; color: var(--accent-primary);"
+                >
+                  Station 
+                  1
+                </span>
+                <span
+                  style="font-size: 0.7rem; font-weight: 900; color: var(--accent-primary);"
+                >
+                  0.0
+                  % load
+                </span>
+              </div>
+              <div
+                style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 0.6rem;"
+              >
+                <div
+                  style="display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--text-white); font-weight: 600;"
+                >
+                  <span>
+                    <strong>
+                      A
+                    </strong>
+                     
+                  </span>
+                  <span
+                    style="font-weight: 800;"
+                  >
+                    12
+                    m
+                  </span>
+                </div>
+                <div
+                  style="display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--text-white); font-weight: 600;"
+                >
+                  <span>
+                    <strong>
+                      B
+                    </strong>
+                     
+                  </span>
+                  <span
+                    style="font-weight: 800;"
+                  >
+                    18
+                    m
+                  </span>
+                </div>
+              </div>
+              <div
+                style="display: flex; gap: 10px; font-size: 0.65rem; font-weight: 800; color: var(--text-sub);"
+              >
+                <span>
+                  Time: 
+                  30.0
+                  m
+                </span>
+                <span>
+                  Idle: 
+                  0.0
+                  m
+                </span>
+              </div>
+            </div>
+            <div
+              style="padding: 1rem; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-secondary); box-shadow: 0 2px 8px rgba(0,0,0,0.05);"
+            >
+              <div
+                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.4rem;"
+              >
+                <span
+                  style="font-size: 0.75rem; font-weight: 900; color: var(--accent-primary);"
+                >
+                  Station 
+                  2
+                </span>
+                <span
+                  style="font-size: 0.7rem; font-weight: 900; color: var(--accent-primary);"
+                >
+                  0.0
+                  % load
+                </span>
+              </div>
+              <div
+                style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 0.6rem;"
+              >
+                <div
+                  style="display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--text-white); font-weight: 600;"
+                >
+                  <span>
+                    <strong>
+                      C
+                    </strong>
+                     
+                  </span>
+                  <span
+                    style="font-weight: 800;"
+                  >
+                    15
+                    m
+                  </span>
+                </div>
+                <div
+                  style="display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--text-white); font-weight: 600;"
+                >
+                  <span>
+                    <strong>
+                      D
+                    </strong>
+                     
+                  </span>
+                  <span
+                    style="font-weight: 800;"
+                  >
+                    10
+                    m
+                  </span>
+                </div>
+              </div>
+              <div
+                style="display: flex; gap: 10px; font-size: 0.65rem; font-weight: 800; color: var(--text-sub);"
+              >
+                <span>
+                  Time: 
+                  25.0
+                  m
+                </span>
+                <span>
+                  Idle: 
+                  0.0
+                  m
+                </span>
+              </div>
+            </div>
+            <div
+              style="padding: 1rem; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-secondary); box-shadow: 0 2px 8px rgba(0,0,0,0.05);"
+            >
+              <div
+                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.4rem;"
+              >
+                <span
+                  style="font-size: 0.75rem; font-weight: 900; color: var(--accent-primary);"
+                >
+                  Station 
+                  3
+                </span>
+                <span
+                  style="font-size: 0.7rem; font-weight: 900; color: var(--accent-primary);"
+                >
+                  0.0
+                  % load
+                </span>
+              </div>
+              <div
+                style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 0.6rem;"
+              >
+                <div
+                  style="display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--text-white); font-weight: 600;"
+                >
+                  <span>
+                    <strong>
+                      E
+                    </strong>
+                     
+                  </span>
+                  <span
+                    style="font-weight: 800;"
+                  >
+                    20
+                    m
+                  </span>
+                </div>
+              </div>
+              <div
+                style="display: flex; gap: 10px; font-size: 0.65rem; font-weight: 800; color: var(--text-sub);"
+              >
+                <span>
+                  Time: 
+                  20.0
+                  m
+                </span>
+                <span>
+                  Idle: 
+                  0.0
+                  m
+                </span>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+    <button
+      aria-label="Adjust parameters"
+      class="fab-adjust-parameters no-print"
+    >
+      <span>
+        ADJUST PARAMETERS
+      </span>
+    </button>
+  </div>
+</div>
+`;

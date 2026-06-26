@@ -29,11 +29,31 @@ export default defineConfig([
     rules: {
       ...react.configs.recommended.rules,
       ...react.configs['jsx-runtime'].rules,
-      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]', ignoreRestSiblings: true }],
       'react/prop-types': 'off',
     },
     settings: {
       react: { version: '19.0' },
     },
   },
+  {
+    files: ['cypress/**/*.js', 'cypress.config.js'],
+    languageOptions: {
+      globals: {
+        ...globals.browser,
+        ...globals.node,
+        cy: 'readonly',
+        Cypress: 'readonly',
+        before: 'readonly',
+        after: 'readonly',
+        beforeEach: 'readonly',
+        afterEach: 'readonly',
+        describe: 'readonly',
+        it: 'readonly',
+        context: 'readonly',
+        expect: 'readonly',
+      },
+    },
+  },
 ])
+
