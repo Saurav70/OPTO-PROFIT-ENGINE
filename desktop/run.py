@@ -15,6 +15,7 @@ import os
 import time
 import threading
 import logging
+import uvicorn
 
 # ── Logging bootstrap ─────────────────────────────────────────────
 logging.basicConfig(
@@ -31,7 +32,6 @@ BASE_URL = f"http://{HOST}:{PORT}"
 
 # ── Uvicorn server (background thread) ───────────────────────────
 def _run_server():
-    import uvicorn
     uvicorn.run(
         "app.main:app",
         host=HOST,
