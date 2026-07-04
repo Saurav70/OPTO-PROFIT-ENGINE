@@ -41,3 +41,16 @@ backend/**/*.pyc
 *.sqlite
 *.sqlite3
 release/
+
+# License key generator scripts (contain private key — never commit!)
+backend/scripts/generate_license.py
+backend/scripts/setup_and_license.py
+
+# Build and Obfuscation Artifacts
+build/
+backend/build/
+desktop/build/
+backend/dist_obf/
+desktop/dist_obf/
+*.db-shm
+*.db-wal

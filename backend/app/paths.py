@@ -49,6 +49,18 @@ def get_persistent_db_path() -> Path:
     return app_dir / "optoprofit.db"
 
 
+def get_persistent_salt_path() -> Path:
+    """Return the path to the machine-specific UUID salt for cryptography."""
+    if sys.platform == "win32":
+        base = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
+    else:
+        base = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+
+    app_dir = base / "OPTO-PROFIT"
+    app_dir.mkdir(parents=True, exist_ok=True)
+    return app_dir / "installation_salt.key"
+
+
 def is_desktop_mode() -> bool:
     """Return ``True`` when running in desktop / PyInstaller mode.
 

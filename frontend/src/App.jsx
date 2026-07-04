@@ -20,11 +20,10 @@ import LicenseActivation from './components/LicenseActivation';
 const Welcome = lazy(() => import('./components/Welcome'));
 const Dashboard = lazy(() => import('./components/Dashboard'));
 const ProcessPlanning = lazy(() => import('./components/ProcessPlanning'));
-const ConceptualLayout = lazy(() => import('./components/ConceptualLayout'));
+const UnifiedLayout = lazy(() => import('./components/UnifiedLayout'));
 const LineOptimization = lazy(() => import('./components/LineOptimization'));
 const FinancialAnalytics = lazy(() => import('./components/FinancialAnalytics'));
 const PrecedenceNetwork = lazy(() => import('./components/PrecedenceNetwork'));
-const FloorLayout = lazy(() => import('./components/FloorLayout'));
 
 import { calculateTaktTime, runOptimization } from './utils/optimizer';
 import { oscilloscopeSampleProfile } from './data/sampleProfiles';
@@ -138,23 +137,71 @@ const App = () => {
     fetchData();
   }, [isAuthenticated]);
 
+  // Handle .opto file double-clicks from Electron
+  useEffect(() => {
+    if (window.electronAPI && window.electronAPI.onOpenFile) {
+      window.electronAPI.onOpenFile(async (fileContent) => {
+        try {
+          const profile = JSON.parse(fileContent);
+          if (profile.tasks && profile.config) {
+            setIsLoading(true);
+            setTasks(profile.tasks);
+            setConfig(profile.config);
+            lastSavedTasksJsonRef.current = JSON.stringify(profile.tasks);
+            if (isAuthenticated) {
+              await Promise.all([
+                api.put('/api/tasks', profile.tasks),
+                api.put('/api/config', profile.config)
+              ]);
+            }
+            addToast({ message: 'Project loaded successfully', variant: 'success' });
+            setIsLoading(false);
+          }
+        } catch (err) {
+          console.error('Failed to parse .opto file', err);
+          addToast({ message: 'Failed to load project file. Invalid format.', variant: 'error' });
+          setIsLoading(false);
+        }
+      });
+    }
+  }, [isAuthenticated, addToast]);
+
   const [profiles, setProfiles] = useState(savedProfiles ? JSON.parse(savedProfiles) : []);
   const [activeProfileId, setActiveProfileId] = useState(savedActiveProfileId || null);
 
   // Shared optimization result — single source of truth for all modules
   const [sharedOptimization, setSharedOptimization] = useState(null);
+  const workerRef = useRef(null);
+
   useEffect(() => {
-    let cancelled = false;
+    // Initialize Web Worker
+    workerRef.current = new Worker(new URL('./utils/optimizerWorker.js', import.meta.url), { type: 'module' });
+    
+    workerRef.current.onmessage = (e) => {
+      if (e.data.type === 'SUCCESS') {
+        setSharedOptimization(e.data.result);
+      } else {
+        console.error('Optimizer Worker Error:', e.data.error);
+      }
+    };
+
+    return () => {
+      workerRef.current?.terminate();
+    };
+  }, []);
+
+  useEffect(() => {
     const run = async () => {
       const takt = await calculateTaktTime(config);
       const targetCycleTime = Number(config?.variables?.find(v => v.key === 'target_cycle_time')?.value || takt);
       const cycleTime = targetCycleTime > 0 ? targetCycleTime : takt;
       const heuristic = config.heuristic || 'LTF';
-      const result = runOptimization(tasks, cycleTime, heuristic, config);
-      if (!cancelled) setSharedOptimization(result);
+      
+      if (workerRef.current) {
+        workerRef.current.postMessage({ tasks, cycleTime, heuristic, config });
+      }
     };
     run();
-    return () => { cancelled = true; };
   }, [tasks, config]);
 
   // Persistence Effects
@@ -365,10 +412,8 @@ const App = () => {
     { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard', num: 1 },
     { id: 'planning', icon: Settings, label: 'Process Planning', num: 2 },
     { id: 'network', icon: Network, label: 'Precedence Network', num: 3 },
-    { id: 'conceptual', icon: Box, label: 'Conceptual Layout', num: 4 },
-    { id: 'optimization', icon: Zap, label: 'Line Optimization', num: 5 },
-    { id: 'floor', icon: Grid, label: 'Floor Layout', num: 6 },
-    { id: 'financials', icon: TrendingUp, label: 'Financial Performance', num: 7 },
+    { id: 'layout', icon: Box, label: 'Line & Floor Layout', num: 4 },
+    { id: 'financials', icon: TrendingUp, label: 'Financial Performance', num: 5 },
   ];
 
   const navigateTo = (screen) => {
@@ -408,6 +453,62 @@ const App = () => {
     return <LicenseActivation onActivationSuccess={() => setIsActivated(true)} />;
   }
 
+  const handleManualFileImport = async (fileContent, fileName) => {
+    try {
+      if (fileName.endsWith('.opto') || fileName.endsWith('.json')) {
+        const profile = JSON.parse(fileContent);
+        if (profile.tasks && profile.config) {
+          setIsLoading(true);
+          setTasks(profile.tasks);
+          setConfig(profile.config);
+          lastSavedTasksJsonRef.current = JSON.stringify(profile.tasks);
+          if (isAuthenticated) {
+            await Promise.all([
+              api.put('/api/tasks', profile.tasks),
+              api.put('/api/config', profile.config)
+            ]);
+          }
+          addToast({ message: 'Project loaded successfully', variant: 'success' });
+          setIsLoading(false);
+        }
+      } else if (fileName.endsWith('.csv')) {
+        const Papa = await import('papaparse');
+        Papa.default.parse(fileContent, {
+          header: true,
+          skipEmptyLines: true,
+          complete: async (results) => {
+            const parsedTasks = results.data.map((row, index) => ({
+              id: row.id || `T${index + 1}`,
+              name: row.name || `Task ${index + 1}`,
+              time: Number(row.time) || 0,
+              predecessors: row.predecessors ? row.predecessors.split(',').map(s => s.trim()) : [],
+              zoning: row.zoning || 'None'
+            }));
+            
+            setIsLoading(true);
+            setTasks(parsedTasks);
+            lastSavedTasksJsonRef.current = JSON.stringify(parsedTasks);
+            if (isAuthenticated) {
+              await api.put('/api/tasks', parsedTasks);
+            }
+            addToast({ message: `${parsedTasks.length} tasks imported successfully`, variant: 'success' });
+            setIsLoading(false);
+          },
+          error: (err) => {
+            console.error('CSV parse error', err);
+            addToast({ message: 'Failed to parse CSV.', variant: 'error' });
+          }
+        });
+      } else {
+        addToast({ message: 'Unsupported file type.', variant: 'error' });
+      }
+    } catch (err) {
+      console.error('Failed to import file', err);
+      addToast({ message: 'Failed to import file. Invalid format.', variant: 'error' });
+      setIsLoading(false);
+    }
+  };
+
   // Derive active profile name
   const activeProfileName = profiles.find(p => p.id === activeProfileId)?.name || (activeProfileId === oscilloscopeSampleProfile.id ? oscilloscopeSampleProfile.name : '');
 
@@ -428,6 +529,7 @@ const App = () => {
             onOpenSettings={() => setIsSettingsOpen(true)}
             activeProfileName={activeProfileName}
             user={userData}
+            onImportData={handleManualFileImport}
           >
             <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
@@ -447,11 +549,10 @@ const App = () => {
                   <ErrorBoundary key={`eb-${currentScreen}`}>
                   <Suspense fallback={<SkeletonLoader />}>
                     {currentScreen === 'dashboard' && <Dashboard tasks={tasks} config={config} setConfig={handleSaveConfig} onNavigate={navigateTo} profiles={profiles} activeProfileId={activeProfileId} onSaveProfile={saveProfile} onLoadProfile={loadProfile} onLoadSampleProfile={loadSampleProfile} onDeleteProfile={deleteProfile} optimization={sharedOptimization} />}
-                    {currentScreen === 'planning' && <ProcessPlanning tasks={tasks} setTasks={setTasks} onSaveTasks={handleSaveTasks} config={config} onNavigate={navigateTo} optimization={sharedOptimization} syncStatus={syncStatus} />}
+                    {currentScreen === 'planning' && <ProcessPlanning tasks={tasks} setTasks={setTasks} onSaveTasks={handleSaveTasks} config={config} setConfig={handleSaveConfig} onNavigate={navigateTo} optimization={sharedOptimization} syncStatus={syncStatus} />}
                     {currentScreen === 'network' && <PrecedenceNetwork tasks={tasks} onNavigate={navigateTo} />}
-                    {currentScreen === 'conceptual' && <ConceptualLayout tasks={tasks} config={config} optimization={sharedOptimization} onNavigate={navigateTo} />}
+                    {currentScreen === 'layout' && <UnifiedLayout tasks={tasks} config={config} setConfig={handleSaveConfig} optimization={sharedOptimization} onOverrideOptimization={setSharedOptimization} onNavigate={navigateTo} />}
                     {currentScreen === 'optimization' && <LineOptimization tasks={tasks} config={config} setConfig={handleSaveConfig} optimization={sharedOptimization} />}
-                    {currentScreen === 'floor' && <FloorLayout tasks={tasks} config={config} onNavigate={navigateTo} optimization={sharedOptimization} />}
                     {currentScreen === 'financials' && <FinancialAnalytics tasks={tasks} config={config} optimization={sharedOptimization} />}
                   </Suspense>
                   </ErrorBoundary>

@@ -83,9 +83,19 @@ Write-Host "      Python environment ready." -ForegroundColor Green
 Write-Host "[4/5] Running PyInstaller to create OPTO-PROFIT.exe..." -ForegroundColor Yellow
 
 $PyInstaller = Join-Path $Venv "Scripts\pyinstaller.exe"
+$PyArmor = Join-Path $Venv "Scripts\pyarmor.exe"
 
 Push-Location $Desktop
 try {
+    Write-Host "      Obfuscating sensitive source code with PyArmor..." -ForegroundColor Cyan
+    if (Test-Path dist_obf) { Remove-Item -Recurse -Force dist_obf }
+    New-Item -ItemType Directory -Path dist_obf | Out-Null
+    Copy-Item -Recurse -Force app dist_obf\
+    Copy-Item -Force run.py dist_obf\
+
+    & $PyArmor gen -O dist_obf app\auth.py app\database.py app\license.py
+    if ($LASTEXITCODE -ne 0) { throw "PyArmor obfuscation failed with exit code $LASTEXITCODE" }
+
     $SpecFile = if ($Debug) { "OPTO-PROFIT-DEBUG.spec" } else { "OPTO-PROFIT.spec" }
     Write-Host "      Using spec file: $SpecFile" -ForegroundColor Cyan
     # Run PyInstaller using our customized spec file that filters out system DLLs like COMCTL32.dll

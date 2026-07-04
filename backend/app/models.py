@@ -47,6 +47,7 @@ class Config(BaseModel):
     separations: List[List[str]] = []
     # e.g., [["Task-C", "Task-D"]] means Task-C and Task-D must NOT be in the same station
     target_efficiency: Optional[int] = 85
+    layout_presets: Optional[Dict[str, Any]] = {}
 
 
 # ── Flexible Task Model ──────────────────────────────────────────

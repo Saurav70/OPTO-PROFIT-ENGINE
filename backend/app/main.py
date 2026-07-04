@@ -57,7 +57,12 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 # pyrefly: ignore [missing-import]
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 
+from .license import get_license_status, activate_license, get_hardware_fingerprint
+
+class ActivateLicenseRequest(BaseModel):
+    key: str
 from .models import (
     AuthTokenResponse,
     AuthUserResponse,
@@ -236,6 +241,22 @@ async def _rate_limit_handler(request: Request, exc: RateLimitExceeded):
     )
 
 
+# ── License Gate Middleware ───────────────────────────────────────
+@app.middleware("http")
+async def license_gate_middleware(request: Request, call_next):
+    path = request.url.path
+    if not path.startswith("/api/") or path.startswith("/api/license/") or path == "/api/status":
+        return await call_next(request)
+        
+    status = get_license_status()
+    if not status.get("activated"):
+        return JSONResponse(
+            status_code=403,
+            content={"detail": "License not activated", "license_status": status}
+        )
+    return await call_next(request)
+
+
 # ── Security Headers Middleware ───────────────────────────────────
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
@@ -334,10 +355,29 @@ def require_user(request: Request, authorization: str | None = Header(default=No
 
 
 @app.get("/api/status")
-def get_status():
+async def get_status():
     return {"status": "ok", "version": "1.0.0"}
 
 
+# ── License Endpoints ─────────────────────────────────────────────
+@app.get("/api/license/status")
+async def api_get_license_status():
+    return get_license_status()
+
+
+@app.get("/api/license/hwid")
+async def api_get_hwid():
+    return {"hwid": get_hardware_fingerprint()}
+
+
+@app.post("/api/license/activate")
+async def api_activate_license(payload: ActivateLicenseRequest):
+    result = activate_license(payload.key)
+    # The frontend handles redirection upon success.
+    return result
+
+
+# ── Health Endpoints ──────────────────────────────────────────────
 @app.post("/api/auth/register", response_model=AuthTokenResponse)
 @limiter.limit("3/minute")
 def register(request: Request, payload: RegisterRequest, response: Response, db: Session = Depends(get_db)):
@@ -887,11 +927,14 @@ def get_config(current_user: dict = Depends(require_user), db: Session = Depends
         
     if not config_row:
         # Seed default config for new tenants
-        config_row = ConfigDB(user_id=user_id, tenant_id=tenant_id, data_json=json.dumps(DEFAULT_CONFIG))
+        config_row = ConfigDB(user_id=user_id, tenant_id=tenant_id, data_json=json.dumps(DEFAULT_CONFIG), layout_presets_json=json.dumps({}))
         db.add(config_row)
         db.commit()
         db.refresh(config_row)
-    return config_row.data
+        
+    config_dict = config_row.data
+    config_dict["layout_presets"] = config_row.layout_presets
+    return config_dict
 
 
 @app.put("/api/config")
@@ -905,13 +948,17 @@ def update_config(config: Config, current_user: dict = Depends(require_user), db
     if not config_row:
         config_row = db.query(ConfigDB).filter(ConfigDB.user_id == user_id).first()
         
+    config_dict = config.dict()
+    layout_presets = config_dict.pop("layout_presets", {})
+
     if config_row:
         # pyrefly: ignore [deprecated]
-        config_row.data_json = json.dumps(config.dict())
+        config_row.data_json = json.dumps(config_dict)
+        config_row.layout_presets_json = json.dumps(layout_presets)
         if tenant_id and not config_row.tenant_id:
             config_row.tenant_id = tenant_id
     else:
-        config_row = ConfigDB(user_id=user_id, tenant_id=tenant_id, data_json=json.dumps(config.dict()))
+        config_row = ConfigDB(user_id=user_id, tenant_id=tenant_id, data_json=json.dumps(config_dict), layout_presets_json=json.dumps(layout_presets))
         db.add(config_row)
     db.commit()
     return {"message": "Config updated"}

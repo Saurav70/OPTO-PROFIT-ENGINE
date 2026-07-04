@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "desktop:dev": "start npm run dev && python ../desktop/run.py --dev",
-    "test": "vitest run"
+    "test": "vitest run",
+    "docs": "jsdoc -c jsdoc.json"
   },
   "dependencies": {
     "@xyflow/react": "^12.10.2",
@@ -20,6 +21,7 @@
     "jspdf-autotable": "^5.0.8",
     "lucide-react": "^1.7.0",
     "mathjs": "^15.2.0",
+    "papaparse": "^5.5.4",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-router-dom": "^7.17.0",
@@ -40,6 +42,7 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.4.0",
+    "jsdoc": "^4.0.5",
     "jsdom": "^29.1.1",
     "vite": "^5.4.11",
     "vitest": "^4.1.8"

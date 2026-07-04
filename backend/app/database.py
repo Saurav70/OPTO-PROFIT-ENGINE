@@ -43,6 +43,29 @@ engine = create_engine(
     echo=False,
 )
 
+def _get_encryption_key() -> str:
+    """Generate a stable, secure 64-character hex key bound to this host machine's hardware ID."""
+    from .license import get_hardware_fingerprint
+    import hashlib
+    hwid = get_hardware_fingerprint()
+    return hashlib.sha256(f"SQLCIPHER_{hwid}_SALT_9281".encode("utf-8")).hexdigest()
+
+
+from sqlalchemy import event
+
+@event.listens_for(engine, "connect")
+def set_sqlite_pragma(dbapi_connection, connection_record):
+    if DATABASE_URL.startswith("sqlite"):
+        cursor = dbapi_connection.cursor()
+        # Set SQLCipher encryption key (will be ignored if SQLCipher support is not built-in)
+        key = _get_encryption_key()
+        cursor.execute(f"PRAGMA key = '{key}'")
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.execute("PRAGMA cache_size=-64000")
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()

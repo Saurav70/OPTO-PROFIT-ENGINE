@@ -18,7 +18,19 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-// MetricDelta component - calculates and displays deltas
+/**
+ * A small utility component that calculates and displays the delta (difference) between a baseline metric and the current metric.
+ * It uses a color-coded format (green for improvement, red for regression) to give visual feedback.
+ * 
+ * @component
+ * @param {Object} props - Component properties
+ * @param {number|string} props.baseline - The baseline metric value to compare against.
+ * @param {number|string} props.current - The current simulation metric value.
+ * @param {boolean} [props.lowerIsBetter=false] - Whether a lower number indicates a better metric (e.g. Cycle Time, Idle Time).
+ * @param {Function} [props.formatter] - Optional formatting function for the delta value.
+ * @param {string} [props.suffix=''] - Suffix string to append to the delta (e.g. '%' or 'm').
+ * @returns {JSX.Element|null} The visual delta indicator or null if inputs are invalid.
+ */
 const MetricDelta = ({ baseline, current, lowerIsBetter = false, formatter, suffix = '' }) => {
   const bVal = parseFloat(baseline);
   const cVal = parseFloat(current);
@@ -41,7 +53,20 @@ const MetricDelta = ({ baseline, current, lowerIsBetter = false, formatter, suff
   );
 };
 
-const LineOptimization = ({ tasks, config, setConfig }) => {
+/**
+ * Main Line Optimization interactive dashboard component. 
+ * Provides a sandbox for heuristic line balancing, allowing users to tweak cycle times, efficiency targets, 
+ * and balancing algorithms (LTF, MFT, RPW). It provides a side-by-side comparison against a captured baseline.
+ * 
+ * @component
+ * @param {Object} props - Component properties
+ * @param {Array<Object>} [props.tasks=[]] - The list of tasks available for optimization.
+ * @param {Object} [props.config={}] - Current optimization parameters and configurations.
+ * @param {Function} props.setConfig - Callback to update the optimization parameters in the parent state.
+ * @param {boolean} [props.embedded=false] - Whether the component is rendered within another layout or in standalone mode.
+ * @returns {JSX.Element} The rendered LineOptimization dashboard layout.
+ */
+const LineOptimization = ({ tasks = [], config = {}, setConfig, embedded = false }) => {
   const currentSimulationState = useEngineStore(state => state.currentSimulationState);
   const baselineState = useEngineStore(state => state.baselineState);
   const setBaselineState = useEngineStore(state => state.setBaselineState);
@@ -166,59 +191,84 @@ const LineOptimization = ({ tasks, config, setConfig }) => {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg-main)', borderRadius: 'var(--radius-lg)', overflow: 'hidden', border: '1px solid var(--border-color)', transition: 'var(--transition-smooth)' }}>
-      {/* Header */}
-      <header style={{ padding: '1.5rem 2rem 1.25rem 2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)', flexWrap: 'wrap', gap: '1rem' }}>
-        <div>
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      height: '100%',
+      background: embedded ? 'transparent' : 'var(--bg-main)',
+      borderRadius: embedded ? 0 : 'var(--radius-lg)',
+      overflow: 'hidden',
+      border: embedded ? 'none' : '1px solid var(--border-color)',
+    }}>
+      {/* ── HEADER ── */}
+      {!embedded && (
+        <div style={{
+          padding: '1.5rem',
+          borderBottom: '1px solid var(--border-color)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '1rem',
+          background: 'var(--bg-secondary)',
+        }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+              <div style={{ background: 'var(--accent-secondary)', padding: '6px', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Zap size={18} color="#fff" />
+              </div>
+              <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 900, color: 'var(--text-white)', letterSpacing: '0.5px' }}>LINE OPTIMIZATION</h2>
+            </div>
+            <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-sub)', fontWeight: 600 }}>Heuristic line balancing & capacity analytics</p>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', position: 'relative' }}>
+            <AnimatePresence>
+              {showSaveSuccess && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  style={{
+                    position: 'absolute',
+                    right: '105%',
+                    background: '#ccfbf1',
+                    color: '#0d9488',
+                    border: '1px solid #0d9488',
+                    padding: '6px 12px',
+                    borderRadius: 'var(--radius-sm)',
+                    fontSize: '0.7rem',
+                    fontWeight: 900,
+                    whiteSpace: 'nowrap',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    boxShadow: 'var(--shadow-glow)'
+                  }}
+                >
+                  <CheckCircle size={12} /> BASELINE CAPTURED
+                </motion.div>
+              )}
+            </AnimatePresence>
+            <button
+              onClick={handleSetBaseline}
+              aria-label="Capture current simulation parameters as comparative baseline"
+              className="btn-primary"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '0.6rem 1.2rem',
+                fontSize: '0.75rem',
+                fontWeight: 900,
+                cursor: 'pointer',
+                boxShadow: 'var(--shadow-glow)'
+              }}
+            >
+              <Camera size={14} /> SET BASELINE SNAPSHOT
+            </button>
+          </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', position: 'relative' }}>
-          <AnimatePresence>
-            {showSaveSuccess && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                style={{
-                  position: 'absolute',
-                  right: '105%',
-                  background: '#ccfbf1',
-                  color: '#0d9488',
-                  border: '1px solid #0d9488',
-                  padding: '6px 12px',
-                  borderRadius: 'var(--radius-sm)',
-                  fontSize: '0.7rem',
-                  fontWeight: 900,
-                  whiteSpace: 'nowrap',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  boxShadow: 'var(--shadow-glow)'
-                }}
-              >
-                <CheckCircle size={12} /> BASELINE CAPTURED
-              </motion.div>
-            )}
-          </AnimatePresence>
-          <button
-            onClick={handleSetBaseline}
-            aria-label="Capture current simulation parameters as comparative baseline"
-            className="btn-primary"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '0.6rem 1.2rem',
-              fontSize: '0.75rem',
-              fontWeight: 900,
-              cursor: 'pointer',
-              boxShadow: 'var(--shadow-glow)'
-            }}
-          >
-            <Camera size={14} /> SET BASELINE SNAPSHOT
-          </button>
-        </div>
-      </header>
-
+      )}
 
       {/* Backdrop overlay for mobile bottom sheet */}
       <div 
@@ -226,9 +276,9 @@ const LineOptimization = ({ tasks, config, setConfig }) => {
         onClick={() => setIsDrawerOpen(false)}
       />
 
-      <div style={{ padding: '1.5rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      <div style={{ padding: embedded ? '0' : '1.5rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
         {/* Warning Alert if no baseline snapshot exists */}
-        {!baselineState && (
+        {!baselineState && !embedded && (
           <div role="alert" style={{ background: 'rgba(245, 158, 11, 0.08)', border: '1px solid var(--accent-warning)', borderRadius: 'var(--radius-md)', padding: '1rem 1.25rem', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
             <AlertTriangle size={18} color="var(--accent-warning)" style={{ flexShrink: 0, marginTop: '2px' }} />
             <div>

@@ -6,19 +6,13 @@
   --font-secondary: 'Inter', sans-serif;
   --font-mono: 'IBM Plex Mono', monospace;
 
-  /* Font Sizes */
-  --text-xs: 0.75rem;
-  /* 12px */
-  --text-sm: 0.875rem;
-  /* 14px */
-  --text-base: 1rem;
-  /* 16px */
-  --text-lg: 1.125rem;
-  /* 18px */
-  --text-xl: 1.25rem;
-  /* 20px */
-  --text-2xl: 1.5rem;
-  /* 24px */
+  /* Font Sizes - Fluid Typography */
+  --text-xs: clamp(0.7rem, 0.65rem + 0.25vw, 0.75rem);
+  --text-sm: clamp(0.8rem, 0.75rem + 0.25vw, 0.875rem);
+  --text-base: clamp(0.9rem, 0.85rem + 0.25vw, 1rem);
+  --text-lg: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
+  --text-xl: clamp(1.1rem, 1rem + 0.5vw, 1.25rem);
+  --text-2xl: clamp(1.25rem, 1.1rem + 1vw, 1.5rem);
 
   font-family: var(--font-primary);
   line-height: 1.5;
@@ -189,7 +183,12 @@ button {
 
 .btn-primary:hover {
   filter: brightness(1.1);
-  transform: translateY(-1px);
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 4px 15px rgba(13, 148, 136, 0.4);
+}
+
+.btn-primary:active {
+  transform: translateY(0) scale(0.98);
 }
 
 .btn-outline {
@@ -209,6 +208,12 @@ button {
 .btn-outline:hover {
   background: var(--accent-primary);
   color: var(--bg-primary);
+  transform: translateY(-1px) scale(1.02);
+  box-shadow: 0 4px 15px rgba(13, 148, 136, 0.2);
+}
+
+.btn-outline:active {
+  transform: translateY(0) scale(0.98);
 }
 
 .sidebar-item {
@@ -1209,74 +1214,42 @@ button {
 /* ── Custom Responsive Layout Helpers ── */
 .kpi-grid-5 {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 1.5rem;
-}
-
-@media (max-width: 1200px) {
-  .kpi-grid-5 {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
-@media (max-width: 768px) {
-  .kpi-grid-5 {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 1rem;
-  }
-}
-
-@media (max-width: 480px) {
-  .kpi-grid-5 {
-    grid-template-columns: 1fr;
-  }
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: clamp(0.75rem, 1.5vw, 1.5rem);
 }
 
 .grid-2fr-1fr {
   display: grid;
   grid-template-columns: 2fr 1fr;
-  gap: 2rem;
+  gap: clamp(1rem, 2vw, 2rem);
 }
 
 @media (max-width: 1024px) {
   .grid-2fr-1fr {
-    grid-template-columns: 1fr;
-    gap: 1.5rem;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr));
   }
 }
 
 .gauge-panel {
-  padding: 2rem;
+  padding: clamp(1.5rem, 3vw, 2rem);
   display: flex;
-  gap: 3rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: clamp(1.5rem, 3vw, 3rem);
   align-items: center;
 }
 
 @media (max-width: 768px) {
   .gauge-panel {
     flex-direction: column;
-    gap: 2rem;
     text-align: center;
-    padding: 1.5rem;
   }
 }
 
 .variables-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1rem;
-}
-
-@media (max-width: 1024px) {
-  .variables-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (max-width: 640px) {
-  .variables-grid {
-    grid-template-columns: 1fr;
-  }
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
+  gap: clamp(0.75rem, 1.5vw, 1rem);
 }
 
 .formulas-grid {

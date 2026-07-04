@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: components/Toast.jsx</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: components/Toast.jsx</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/* eslint-disable react-refresh/only-export-components */
+import React, { useEffect, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { CheckCircle, AlertTriangle, XCircle, X } from 'lucide-react';
+
+const VARIANT_CONFIG = {
+  success: {
+    icon: CheckCircle,
+    bg: 'rgba(13, 148, 136, 0.12)',
+    border: 'rgba(13, 148, 136, 0.4)',
+    color: 'var(--accent-primary)',
+    shadow: 'rgba(13, 148, 136, 0.15)',
+  },
+  warning: {
+    icon: AlertTriangle,
+    bg: 'rgba(245, 158, 11, 0.12)',
+    border: 'rgba(245, 158, 11, 0.4)',
+    color: 'var(--accent-warning)',
+    shadow: 'rgba(245, 158, 11, 0.15)',
+  },
+  error: {
+    icon: XCircle,
+    bg: 'rgba(239, 68, 68, 0.12)',
+    border: 'rgba(239, 68, 68, 0.4)',
+    color: 'var(--accent-danger)',
+    shadow: 'rgba(239, 68, 68, 0.15)',
+  },
+};
+
+/**
+ * Toast — A single self-dismissing notification.
+ *
+ * Props:
+ *  - id: unique key
+ *  - message: string
+ *  - variant: 'success' | 'warning' | 'error'
+ *  - duration: auto-dismiss ms (0 = sticky)
+ *  - onDismiss(id): callback
+ */
+const ToastItem = ({ id, message, variant = 'error', duration = 5000, onDismiss }) => {
+  const cfg = VARIANT_CONFIG[variant] || VARIANT_CONFIG.error;
+  const Icon = cfg.icon;
+
+  useEffect(() => {
+    if (!duration) return undefined;
+    const timer = setTimeout(() => onDismiss(id), duration);
+    return () => clearTimeout(timer);
+  }, [id, duration, onDismiss]);
+
+  return (
+    &lt;motion.div
+      layout
+      initial={{ opacity: 0, y: -14, scale: 0.96 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: -10, scale: 0.94 }}
+      transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+        padding: '0.75rem 1rem',
+        background: cfg.bg,
+        border: `1px solid ${cfg.border}`,
+        borderRadius: '10px',
+        backdropFilter: 'blur(12px)',
+        boxShadow: `0 8px 24px ${cfg.shadow}`,
+        minWidth: '280px',
+        maxWidth: '420px',
+      }}
+    >
+      &lt;Icon size={16} color={cfg.color} style={{ flexShrink: 0 }} />
+      &lt;span
+        style={{
+          flex: 1,
+          fontSize: '0.74rem',
+          fontWeight: 700,
+          color: cfg.color,
+          lineHeight: 1.4,
+          letterSpacing: '0.3px',
+        }}
+      >
+        {message}
+      &lt;/span>
+      &lt;button
+        onClick={() => onDismiss(id)}
+        style={{
+          background: 'transparent',
+          border: 'none',
+          color: cfg.color,
+          opacity: 0.5,
+          cursor: 'pointer',
+          padding: '2px',
+          display: 'flex',
+          flexShrink: 0,
+        }}
+        aria-label="Dismiss"
+      >
+        &lt;X size={14} />
+      &lt;/button>
+    &lt;/motion.div>
+  );
+};
+
+/**
+ * ToastContainer — Renders a stack of toasts.
+ *
+ * Props:
+ *  - toasts: [{ id, message, variant, duration }]
+ *  - onDismiss(id): removes from array
+ */
+const ToastContainer = ({ toasts = [], onDismiss }) => (
+  &lt;div
+    style={{
+      position: 'fixed',
+      top: '1.2rem',
+      right: '1.2rem',
+      zIndex: 9999,
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '0.6rem',
+      pointerEvents: 'none',
+    }}
+  >
+    &lt;AnimatePresence mode="popLayout">
+      {toasts.map((t) => (
+        &lt;div key={t.id} style={{ pointerEvents: 'auto' }}>
+          &lt;ToastItem {...t} onDismiss={onDismiss} />
+        &lt;/div>
+      ))}
+    &lt;/AnimatePresence>
+  &lt;/div>
+);
+
+/**
+ * useToast — Hook that manages toast state.
+ *
+ * Returns [toasts, addToast, dismissToast].
+ * addToast({ message, variant?, duration? })
+ */
+export const useToast = () => {
+  const [toasts, setToasts] = React.useState([]);
+
+  const addToast = useCallback(({ message, variant = 'error', duration = 5000 }) => {
+    const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    setToasts((prev) => [...prev.slice(-4), { id, message, variant, duration }]);
+  }, []);
+
+  const dismissToast = useCallback((id) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  return [toasts, addToast, dismissToast];
+};
+
+export default ToastContainer;
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#EmptyState">EmptyState</a></li><li><a href="global.html#FloorLayout">FloorLayout</a></li><li><a href="global.html#LineOptimization">LineOptimization</a></li><li><a href="global.html#MetricDelta">MetricDelta</a></li><li><a href="global.html#ToastContainer">ToastContainer</a></li><li><a href="global.html#ToastItem">ToastItem</a></li><li><a href="global.html#buildContext">buildContext</a></li><li><a href="global.html#evaluateFormula">evaluateFormula</a></li><li><a href="global.html#formatCurrency">formatCurrency</a></li><li><a href="global.html#getVariable">getVariable</a></li><li><a href="global.html#getVariableValue">getVariableValue</a></li><li><a href="global.html#useToast">useToast</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Sat Jul 04 2026 15:15:32 GMT+0530 (India Standard Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

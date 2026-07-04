@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { calculateTaktTime, calculateNmin, calculateROI, calculateCriticalPath } from '../utils/optimizer';
 import { formatCurrency } from '../utils/formulaEngine';
 import FormulaEditor from './FormulaEditor';
+import ReportGenerator from './ReportGenerator';
 
 const Dashboard = ({ tasks, config, setConfig, onNavigate, profiles, activeProfileId, onSaveProfile, onLoadProfile, onLoadSampleProfile, onDeleteProfile, optimization }) => {
   const [newProfileName, setNewProfileName] = useState('');
@@ -13,6 +14,7 @@ const Dashboard = ({ tasks, config, setConfig, onNavigate, profiles, activeProfi
   // P1-6: Inline state for adding formulas and zones (replaces prompt/alert)
   const [newFormulaName, setNewFormulaName] = useState('');
   const [showNewFormulaInput, setShowNewFormulaInput] = useState(false);
+  const [isReportOpen, setIsReportOpen] = useState(false);
 
 
   const variables = config?.variables || [];
@@ -104,11 +106,17 @@ const Dashboard = ({ tasks, config, setConfig, onNavigate, profiles, activeProfi
       exit={{ opacity: 0 }}
       style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg-main)', borderRadius: 'var(--radius-lg)', overflow: 'hidden', border: '1px solid var(--border-color)', transition: 'var(--transition-smooth)' }}
     >
-      <div className="responsive-header" style={{ padding: '1.5rem 2rem 0 2rem' }}>
+      <div className="responsive-header" style={{ padding: '1.5rem 2rem 0 2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-
           <h2 className="header-title" style={{ margin: 0, fontSize: '1.4rem', color: 'var(--text-white)' }}>PRODUCTION DASHBOARD</h2>
         </div>
+        <button 
+          className="btn-primary" 
+          onClick={() => setIsReportOpen(true)}
+          style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '0.6rem 1.2rem', fontSize: '0.75rem', fontWeight: 900, cursor: 'pointer', boxShadow: 'var(--shadow-glow)' }}
+        >
+          <Printer size={14} /> GENERATE PDF REPORT
+        </button>
       </div>
 
       <motion.div variants={containerVariants} initial="hidden" animate="visible" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '2rem', overflowY: 'auto' }}>
@@ -379,6 +387,13 @@ const Dashboard = ({ tasks, config, setConfig, onNavigate, profiles, activeProfi
             )}
           </AnimatePresence>
 
+        <ReportGenerator 
+          isOpen={isReportOpen} 
+          onClose={() => setIsReportOpen(false)} 
+          tasks={tasks}
+          config={config}
+          optimization={optimization}
+        />
         </div>
 
       </motion.div>

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, Sun, Moon, Settings, LogOut, User, ChevronDown, Cpu } from 'lucide-react';
+import { Menu, Sun, Moon, Settings, LogOut, User, ChevronDown, Cpu, Upload, Download } from 'lucide-react';
 import Sidebar from './Sidebar';
 import useEngineStore from '../stores/useEngineStore';
 import { exportStationDataToCSV } from '../utils/reportGenerator';
@@ -16,17 +16,35 @@ const DashboardLayout = ({
   onLogout,
   onOpenSettings,
   activeProfileName,
-  user
+  user,
+  onImportData
 }) => {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const currentSimulationState = useEngineStore(state => state.currentSimulationState);
+  const fileInputRef = React.useRef(null);
+
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target.result;
+      if (onImportData) {
+        onImportData(content, file.name);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = ''; // reset
+  };
 
 
   const handleExportCSV = () => {
     const stations = currentSimulationState?.optimization?.stations;
-    if (stations) {
-      exportStationDataToCSV(stations);
+    const tasks = currentSimulationState?.tasks;
+    if (stations && tasks) {
+      exportStationDataToCSV(stations, tasks);
     }
   };
 
@@ -86,9 +104,18 @@ const DashboardLayout = ({
           <div className="top-nav-right">
 
 
+            {/* Hidden File Input */}
+            <input
+              type="file"
+              ref={fileInputRef}
+              style={{ display: 'none' }}
+              accept=".csv,.xlsx,.opto,.json"
+              onChange={handleFileChange}
+            />
+
             {/* Import Data Button */}
             <button
-              onClick={() => alert('Import data functionality coming soon!')}
+              onClick={() => fileInputRef.current?.click()}
               className="btn-outline hover-glow top-nav-import-btn"
               style={{
                 display: 'flex',
@@ -107,7 +134,7 @@ const DashboardLayout = ({
                 transition: 'all 0.2s ease',
               }}
             >
-              📤 Import Data
+              <Upload size={14} /> Import Data
             </button>
 
             {/* Export to Excel (CSV) Button */}
@@ -133,7 +160,7 @@ const DashboardLayout = ({
                 transition: 'all 0.2s ease',
               }}
             >
-              📥 Export to Excel (CSV)
+              <Download size={14} /> Export to Excel (CSV)
             </button>
 
             {/* Dark Mode Toggle */}
@@ -204,7 +231,18 @@ const DashboardLayout = ({
         {/* Main Content Area (Wraps children inside cards) */}
         <main className="app-main">
           <div className="app-content-card" id="optimization-dashboard-view">
-            {children}
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={currentScreen}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.25, ease: "easeOut" }}
+                style={{ width: '100%', height: '100%' }}
+              >
+                {children}
+              </motion.div>
+            </AnimatePresence>
           </div>
         </main>
       </div>

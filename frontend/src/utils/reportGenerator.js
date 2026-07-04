@@ -271,21 +271,35 @@ export async function generateExecutiveReport(baselineState, currentState, layou
   doc.save(`Optoprofit_Executive_Report_${safeConfigName}_${new Date().toISOString().split('T')[0]}.pdf`);
 }
 
-export function exportStationDataToCSV(stationsArray) {
-  if (!stationsArray || !Array.isArray(stationsArray) || stationsArray.length === 0) {
-    console.error("No stations data to export");
+export function exportStationDataToCSV(stationsArray, tasks) {
+  if (!tasks || !Array.isArray(tasks) || tasks.length === 0) {
+    console.error("No tasks data to export");
     return;
   }
   
-  const cycleTime = Math.max(...stationsArray.map(s => s.time || 0));
+  // Create a map of task ID to Station Name
+  const taskToStationMap = {};
+  if (stationsArray && Array.isArray(stationsArray)) {
+    stationsArray.forEach((station, index) => {
+      const stationId = `Station ${index + 1}`;
+      if (station.tasks && Array.isArray(station.tasks)) {
+        station.tasks.forEach(t => {
+          taskToStationMap[t.id] = stationId;
+        });
+      }
+    });
+  }
   
-  const headers = ['Station ID', 'Assigned Tasks', 'Total Station Time (min)', 'Idle Time (min)'];
-  const rows = stationsArray.map((station, index) => {
-    const stationId = `Station ${index + 1}`;
-    const assignedTasks = station.tasks.map(t => `${t.id} (${t.name})`).join('; ');
-    const totalTime = (station.time || 0).toFixed(2);
-    const idleTime = Math.max(0, cycleTime - (station.time || 0)).toFixed(2);
-    return [stationId, assignedTasks, totalTime, idleTime];
+  const headers = ['id', 'name', 'time', 'predecessors', 'zoning', 'assigned_station'];
+  const rows = tasks.map(task => {
+    return [
+      task.id || '',
+      task.name || '',
+      task.time || 0,
+      Array.isArray(task.predecessors) ? task.predecessors.join(', ') : (task.predecessors || ''),
+      task.zoning || 'None',
+      taskToStationMap[task.id] || 'Unassigned'
+    ];
   });
   
   const csvContent = [
@@ -297,7 +311,7 @@ export function exportStationDataToCSV(stationsArray) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.setAttribute('download', 'Optoprofit_Station_Balance.csv');
+  link.setAttribute('download', 'Optoprofit_Tasks_Export.csv');
   link.style.visibility = 'hidden';
   document.body.appendChild(link);
   link.click();

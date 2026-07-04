@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Plus, Trash2, Save, Download, AlertTriangle, CheckCircle, Sigma, Settings2, X, PanelLeft, ClipboardList, ListX } from 'lucide-react';
+import { Plus, Trash2, Save, Download, AlertTriangle, CheckCircle, Sigma, Settings2, X, PanelLeft, ClipboardList, ListX, Zap, ChevronDown, ChevronUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { detectCircularDependency, generateFormulaTrace, calculateTaktTime, runOptimization } from '../utils/optimizer';
 import EmptyState from './EmptyState';
+import LineOptimization from './LineOptimization';
 
 /* ─── Predecessor Dropdown ─── */
 const PredecessorInput = ({ value, tasks, currentId, onUpdate, isError, inputId }) => {
@@ -115,10 +116,11 @@ const FormulaStep = ({ step, index }) => (
 );
 
 /* ─── Main Component ─── */
-const ProcessPlanning = ({ tasks, setTasks, onSaveTasks, config, optimization, syncStatus }) => {
+const ProcessPlanning = ({ tasks, setTasks, onSaveTasks, config, setConfig, onNavigate, optimization, syncStatus }) => {
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [isOptimizationOpen, setIsOptimizationOpen] = useState(false);
   const [showFormulaTrace, setShowFormulaTrace] = useState(true);
   const [showColumnManager, setShowColumnManager] = useState(false);
   const [customColumns, setCustomColumns] = useState(() => {
@@ -694,6 +696,42 @@ const ProcessPlanning = ({ tasks, setTasks, onSaveTasks, config, optimization, s
                     </div>
                   </div>
                 )}
+              </div>
+
+              {/* ── Line Optimization Collapsible Panel ── */}
+              <div style={{ marginTop: '1.5rem', background: 'var(--bg-secondary)', border: `1px solid ${isOptimizationOpen ? 'var(--accent-secondary)' : 'var(--border-color)'}`, borderRadius: 'var(--radius-md)', overflow: 'hidden', transition: 'border-color 0.3s' }}>
+                <button
+                  onClick={() => setIsOptimizationOpen(!isOptimizationOpen)}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 1.5rem', background: isOptimizationOpen ? 'rgba(168, 85, 247, 0.05)' : 'transparent', border: 'none', cursor: 'pointer', outline: 'none' }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ background: 'var(--accent-secondary)', padding: '6px', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Zap size={14} color="#fff" />
+                    </div>
+                    <div style={{ textAlign: 'left' }}>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 900, color: 'var(--text-white)', letterSpacing: '0.5px' }}>LINE OPTIMIZATION</div>
+                      <div style={{ fontSize: '0.65rem', color: 'var(--text-sub)', fontWeight: 600 }}>Configure and run the heuristic line balancing algorithm</div>
+                    </div>
+                  </div>
+                  {isOptimizationOpen ? <ChevronUp size={20} color="var(--text-sub)" /> : <ChevronDown size={20} color="var(--text-sub)" />}
+                </button>
+                <AnimatePresence>
+                  {isOptimizationOpen && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.3 }}
+                      style={{ overflow: 'hidden' }}
+                    >
+                      <div style={{ padding: '0 1.5rem 1.5rem 1.5rem', borderTop: '1px solid var(--border-color)' }}>
+                        <div style={{ marginTop: '1rem' }}>
+                          <LineOptimization tasks={tasks} config={config} setConfig={setConfig} embedded />
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
           </div>
         </div>

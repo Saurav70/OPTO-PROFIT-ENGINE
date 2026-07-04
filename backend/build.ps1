@@ -53,7 +53,6 @@ if (-not (Test-Path $Venv)) {
 }
 
 $Pip       = Join-Path $Venv "Scripts\pip.exe"
-$PythonExe = Join-Path $Venv "Scripts\python.exe"
 
 & $Pip install --quiet --upgrade pip
 & $Pip install --quiet -r (Join-Path $Backend "requirements.txt")
@@ -64,6 +63,7 @@ Write-Host "      Python environment ready." -ForegroundColor Green
 Write-Host "[4/4] Running PyInstaller to create OPTO-PROFIT.exe..." -ForegroundColor Yellow
 
 $PyInstaller = Join-Path $Venv "Scripts\pyinstaller.exe"
+$PyArmor = Join-Path $Venv "Scripts\pyarmor.exe"
 
 # Resolve icon path (use existing desktop icon if available)
 $IconArg = @()
@@ -75,13 +75,22 @@ if (Test-Path $IconPath) {
 
 Push-Location $Backend
 try {
+    Write-Host "      Obfuscating sensitive source code with PyArmor..." -ForegroundColor Cyan
+    if (Test-Path dist_obf) { Remove-Item -Recurse -Force dist_obf }
+    New-Item -ItemType Directory -Path dist_obf | Out-Null
+    Copy-Item -Recurse -Force app dist_obf\
+    Copy-Item -Force run_desktop.py dist_obf\
+
+    & $PyArmor gen -O dist_obf app\auth.py app\database.py app\license.py app\sql_models.py
+    if ($LASTEXITCODE -ne 0) { throw "PyArmor obfuscation failed with exit code $LASTEXITCODE" }
+
     & $PyInstaller `
         --noconfirm `
         --onefile `
-        --console `
+        --windowed `
         --name "OPTO-PROFIT" `
         --add-data "dist;dist" `
-        --add-data "app;app" `
+        --paths "dist_obf" `
         --hidden-import "uvicorn.logging" `
         --hidden-import "uvicorn.loops" `
         --hidden-import "uvicorn.loops.auto" `
@@ -116,7 +125,7 @@ try {
         --hidden-import "jose.jwt" `
         --hidden-import "dotenv" `
         @IconArg `
-        "run_desktop.py"
+        "dist_obf\run_desktop.py"
 
     if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed with exit code $LASTEXITCODE" }
 } finally {

@@ -2,11 +2,11 @@
 
 
 a = Analysis(
-    ['run_desktop.py'],
-    pathex=[],
+    ['dist_obf\\run_desktop.py'],
+    pathex=['dist_obf'],
     binaries=[],
-    datas=[('dist', 'dist'), ('app', 'app')],
-    hiddenimports=['uvicorn.logging', 'uvicorn.loops', 'uvicorn.loops.auto', 'uvicorn.protocols', 'uvicorn.protocols.http', 'uvicorn.protocols.http.auto', 'uvicorn.protocols.websockets', 'uvicorn.protocols.websockets.auto', 'uvicorn.lifespan', 'uvicorn.lifespan.on', 'email_validator', 'slowapi', 'slowapi.util', 'slowapi.errors', 'pyotp', 'multipart', 'fastapi.staticfiles', 'fastapi.responses', 'fastapi.middleware', 'fastapi.middleware.cors', 'starlette.middleware', 'starlette.middleware.cors', 'starlette.middleware.base', 'starlette.routing', 'starlette.staticfiles', 'starlette.responses', 'starlette.requests', 'sqlalchemy.dialects.sqlite', 'passlib.handlers.bcrypt', 'jose', 'jose.jwt', 'dotenv'],
+    datas=[('dist', 'dist')],
+    hiddenimports=['uvicorn.logging', 'uvicorn.loops', 'uvicorn.loops.auto', 'uvicorn.protocols', 'uvicorn.protocols.http', 'uvicorn.protocols.http.auto', 'uvicorn.protocols.websockets', 'uvicorn.protocols.websockets.auto', 'uvicorn.lifespan', 'uvicorn.lifespan.on', 'email_validator', 'slowapi', 'slowapi.util', 'slowapi.errors', 'pyotp', 'webview', 'multipart', 'fastapi.staticfiles', 'fastapi.responses', 'fastapi.middleware', 'fastapi.middleware.cors', 'starlette.middleware', 'starlette.middleware.cors', 'starlette.middleware.base', 'starlette.routing', 'starlette.staticfiles', 'starlette.responses', 'starlette.requests', 'sqlalchemy.dialects.sqlite', 'passlib.handlers.bcrypt', 'jose', 'jose.jwt', 'dotenv'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -29,7 +29,7 @@ exe = EXE(
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=True,
+    console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,

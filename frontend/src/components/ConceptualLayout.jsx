@@ -23,7 +23,7 @@ const getStationIcon = (idx) => {
   return icons[idx % icons.length];
 };
 
-const ConceptualLayout = ({ tasks, config, optimization, onNavigate }) => {
+const ConceptualLayout = ({ tasks, config, optimization, onNavigate, onOverrideOptimization, embedded = false }) => {
   const [taktTime, setTaktTime] = useState(0);
   useEffect(() => {
     let cancelled = false;
@@ -32,6 +32,7 @@ const ConceptualLayout = ({ tasks, config, optimization, onNavigate }) => {
   }, [config]);
 
   if (!tasks || tasks.length === 0) {
+    if (embedded) return null; // UnifiedLayout will handle empty state, or we just render empty
     return (
       <EmptyState
         icon={Layout}
@@ -56,13 +57,79 @@ const ConceptualLayout = ({ tasks, config, optimization, onNavigate }) => {
     { label: 'Target Stations', value: nMin || 0, icon: Layout },
   ];
 
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="conceptual-layout-screen"
-    >
+  const handleDragStart = (e, taskId) => {
+    e.dataTransfer.setData('text/plain', taskId);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (e, targetStationIdx) => {
+    e.preventDefault();
+    const taskId = e.dataTransfer.getData('text/plain');
+    if (!taskId) return;
+    
+    // Clone stations deeply
+    const newStations = JSON.parse(JSON.stringify(stations));
+    
+    // Find task and remove from source
+    let sourceStationIdx = -1;
+    let taskObj = null;
+    
+    for (let i = 0; i < newStations.length; i++) {
+      const idx = newStations[i].tasks.findIndex(t => t.id === taskId);
+      if (idx !== -1) {
+        sourceStationIdx = i;
+        taskObj = newStations[i].tasks[idx];
+        newStations[i].tasks.splice(idx, 1);
+        break;
+      }
+    }
+    
+    if (sourceStationIdx === -1 || sourceStationIdx === targetStationIdx || !taskObj) return;
+    
+    // Add to target station
+    newStations[targetStationIdx].tasks.push(taskObj);
+    
+    // Recalculate times
+    newStations.forEach(station => {
+      station.time = station.tasks.reduce((sum, t) => sum + (Number(t.time) || 0), 0);
+    });
+    
+    // Remove empty stations
+    const filteredStations = newStations.filter(s => s.tasks.length > 0);
+    
+    // Recalculate metrics
+    const nActual = filteredStations.length;
+    const efficiency = nActual > 0 && taktTime > 0 ? (totalTaskTime / (nActual * taktTime)) * 100 : 0;
+    const totalIdleTime = (nActual * taktTime) - totalTaskTime;
+    const balanceDelay = Math.max(0, 100 - efficiency);
+    
+    const actualCycleTime = nActual > 0 ? Math.max(...filteredStations.map(s => s.time)) : 0;
+    const smoothnessIndex = nActual > 0
+      ? Math.sqrt(filteredStations.reduce((sum, s) => sum + Math.pow(actualCycleTime - s.time, 2), 0))
+      : 0;
+      
+    const newOptimization = {
+      ...optimization,
+      stations: filteredStations,
+      nActual,
+      efficiency: efficiency.toFixed(2),
+      balanceDelay: balanceDelay.toFixed(2),
+      totalIdleTime,
+      smoothnessIndex,
+    };
+    
+    if (onOverrideOptimization) {
+      onOverrideOptimization(newOptimization);
+    }
+  };
+
+  const Content = (
+    <>
       <section className="conceptual-summary-grid" aria-label="Conceptual layout summary">
         {summaryStats.map((stat) => {
           const Icon = stat.icon;
@@ -112,6 +179,8 @@ const ConceptualLayout = ({ tasks, config, optimization, onNavigate }) => {
                     animate={{ y: 0, opacity: 1 }}
                     transition={{ delay: idx * 0.06 }}
                     className={`conceptual-station-card ${isLast ? 'final-station' : ''}`}
+                    onDragOver={handleDragOver}
+                    onDrop={(e) => handleDrop(e, idx)}
                   >
                     <div className="conceptual-station-top">
                       <div className="conceptual-station-id">
@@ -129,7 +198,14 @@ const ConceptualLayout = ({ tasks, config, optimization, onNavigate }) => {
 
                     <div className="conceptual-task-list">
                       {station.tasks.map((task) => (
-                        <div key={task.id} className="conceptual-task-row">
+                        <div 
+                          key={task.id} 
+                          className="conceptual-task-row"
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, task.id)}
+                          style={{ cursor: 'grab' }}
+                          title="Drag to move task to another station"
+                        >
                           <span>{task.id}</span>
                           <p>{task.name}</p>
                           <strong>{Number(task.time || 0).toFixed(1)}m</strong>
@@ -154,6 +230,25 @@ const ConceptualLayout = ({ tasks, config, optimization, onNavigate }) => {
           </>
         )}
       </section>
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <div className="conceptual-layout-screen" style={{ height: '100%', overflowY: 'auto' }}>
+        {Content}
+      </div>
+    );
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="conceptual-layout-screen"
+    >
+      {Content}
     </motion.div>
   );
 };

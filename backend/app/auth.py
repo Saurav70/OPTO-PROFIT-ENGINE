@@ -12,6 +12,9 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 import bcrypt
 from jose import jwt, JWTError
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+import base64
 from .database import get_db
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
@@ -25,18 +28,26 @@ ENV = os.getenv("ENV", "development").lower()
 _logger = __import__("logging").getLogger("optoprofit.auth")
 
 if not SESSION_SECRET:
-    if ENV == "production":
-        raise RuntimeError(
-            "SESSION_SECRET environment variable must be set in production mode. "
-            "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
-        )
-    # Generate a random ephemeral key per process start for local development.
-    # This is intentionally NOT persisted — all dev sessions are invalidated on restart.
-    SECRET_KEY = secrets.token_hex(32)
-    _logger.warning(
-        "SESSION_SECRET not set — using an ephemeral random key for this process. "
-        "All sessions will be lost on server restart. Set SESSION_SECRET in .env for persistence."
+    from .license import get_hardware_fingerprint
+    from .paths import get_persistent_salt_path
+    import uuid
+    
+    salt_path = get_persistent_salt_path()
+    if not salt_path.exists():
+        salt_path.parent.mkdir(parents=True, exist_ok=True)
+        salt_path.write_bytes(uuid.uuid4().bytes)
+    dynamic_salt = salt_path.read_bytes()
+
+    # Derive a persistent secret key based on the machine's HWID using PBKDF2
+    hwid = get_hardware_fingerprint().encode("utf-8")
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=dynamic_salt,
+        iterations=600000,
     )
+    SECRET_KEY = base64.urlsafe_b64encode(kdf.derive(hwid)).decode("utf-8")
+    _logger.info("SESSION_SECRET not set — using HWID-derived PBKDF2 key.")
 else:
     SECRET_KEY = SESSION_SECRET
 
@@ -240,7 +251,8 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    user = db.query(UserDB).filter(
+    import typing
+    user: typing.Any = db.query(UserDB).filter(
         (UserDB.email == email) | (UserDB.username_normalized == email.strip().lower())
     ).first()
 

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { IndianRupee, ArrowUpRight, Package, Activity, ToggleLeft, ToggleRight, FileText, Download } from 'lucide-react';
+import { IndianRupee, ArrowUpRight, Package, Activity, ToggleLeft, ToggleRight, FileText, Download, Sliders, RotateCcw } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { calculateROI } from '../utils/optimizer';
 import { formatCurrency, getVariableValue } from '../utils/formulaEngine';
@@ -10,19 +10,31 @@ const FinancialAnalytics = ({ tasks, config, optimization }) => {
   const [serverRoi, setServerRoi] = useState(null);
   const [localRoi, setLocalRoi] = useState({});
 
+  const [overrideVars, setOverrideVars] = useState({});
+
+  const handleOverride = (key, val) => {
+    setOverrideVars(prev => ({ ...prev, [key]: val }));
+  };
+
+  const variables = config?.variables || [];
+  const activeVariables = variables.map(v => 
+    overrideVars[v.key] !== undefined ? { ...v, value: overrideVars[v.key] } : v
+  );
+  
+  const localConfig = { ...config, variables: activeVariables };
+
   useEffect(() => {
     let cancelled = false;
-    calculateROI(tasks, config, optimization || {}).then(data => {
+    calculateROI(tasks, localConfig, optimization || {}).then(data => {
       if (!cancelled) setLocalRoi(data);
     });
     return () => { cancelled = true; };
-  }, [tasks, config, optimization]);
+  }, [tasks, config, optimization, overrideVars]);
 
   // P2-9: liveChart toggle controls data source — server (live) vs local (static)
   const roi = (liveChart && serverRoi) ? serverRoi : localRoi;
   
-  const variables = config?.variables || [];
-  const workDays = getVariableValue(variables, 'work_days', 25);
+  const workDays = getVariableValue(activeVariables, 'work_days', 25);
   const paybackLabel = roi.paybackMonths > 0 ? `${roi.paybackMonths.toFixed(1)} mo` : 'N/A';
 
   const handlePdfExport = () => {
@@ -227,29 +239,77 @@ const FinancialAnalytics = ({ tasks, config, optimization }) => {
           </div>
         </div>
 
-        {/* Operational Cost Audit */}
-        <div style={{ background: 'var(--card-bg)', borderRadius: '12px', border: '1px solid var(--border-color)', overflow: 'hidden', transition: 'all 0.3s ease' }}>
-          <div className="responsive-header" style={{ padding: '1rem 1.5rem', borderBottom: '1px solid var(--border-color)', background: 'var(--bg-secondary)' }}>
-            <h4 style={{ margin: 0, fontSize: '0.85rem', fontWeight: 900, color: 'var(--text-white)' }}>OPERATIONAL COST AUDIT</h4>
-            <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-sub)' }}>{new Date().toLocaleDateString()}</div>
-          </div>
-          <div className="audit-grid">
-            {[
-              { label: 'LABOR EFFICIENCY', val: `${optimization?.efficiency || '0.00'}%`, status: 'OPTIMAL' },
-              { label: 'BALANCE DELAY', val: `${optimization?.balanceDelay || '0.00'}%`, status: 'REDUCED' },
-              { label: 'DAILY PROFIT DELTA', val: `+${formatCurrency(roi.profitIncrease / workDays, variables)}`, status: 'POSITIVE' },
-            ].map((item, i) => (
-              <div key={i} style={{ background: 'var(--card-bg)', padding: '1.5rem' }}>
-                <span style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--text-sub)', letterSpacing: '1px' }}>{item.label}</span>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', marginTop: '4px' }}>
-                  <span style={{ fontSize: '1.4rem', fontWeight: 900, color: 'var(--text-white)' }}>{item.val}</span>
-                  <span style={{ fontSize: '0.6rem', fontWeight: 900, color: 'var(--accent-primary)', background: 'var(--accent-primary)20', padding: '2px 8px', borderRadius: '10px' }}>{item.status}</span>
+        </div>
+
+        <div className="grid-2fr-1fr">
+          {/* Operational Cost Audit */}
+          <div style={{ background: 'var(--card-bg)', borderRadius: '12px', border: '1px solid var(--border-color)', overflow: 'hidden', transition: 'all 0.3s ease' }}>
+            <div className="responsive-header" style={{ padding: '1rem 1.5rem', borderBottom: '1px solid var(--border-color)', background: 'var(--bg-secondary)' }}>
+              <h4 style={{ margin: 0, fontSize: '0.85rem', fontWeight: 900, color: 'var(--text-white)' }}>OPERATIONAL COST AUDIT</h4>
+              <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-sub)' }}>{new Date().toLocaleDateString()}</div>
+            </div>
+            <div className="audit-grid">
+              {[
+                { label: 'LABOR EFFICIENCY', val: `${optimization?.efficiency || '0.00'}%`, status: 'OPTIMAL' },
+                { label: 'BALANCE DELAY', val: `${optimization?.balanceDelay || '0.00'}%`, status: 'REDUCED' },
+                { label: 'DAILY PROFIT DELTA', val: `+${formatCurrency(roi.profitIncrease / workDays, activeVariables)}`, status: 'POSITIVE' },
+              ].map((item, i) => (
+                <div key={i} style={{ background: 'var(--card-bg)', padding: '1.5rem' }}>
+                  <span style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--text-sub)', letterSpacing: '1px' }}>{item.label}</span>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', marginTop: '4px' }}>
+                    <span style={{ fontSize: '1.4rem', fontWeight: 900, color: 'var(--text-white)' }}>{item.val}</span>
+                    <span style={{ fontSize: '0.6rem', fontWeight: 900, color: 'var(--accent-primary)', background: 'var(--accent-primary)20', padding: '2px 8px', borderRadius: '10px' }}>{item.status}</span>
+                  </div>
                 </div>
+              ))}
+            </div>
+          </div>
+
+          {/* What-If Scenario Panel */}
+          <div style={{ background: 'var(--bg-secondary)', borderRadius: '12px', border: '1px solid var(--border-color)', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 900, color: 'var(--text-white)' }}>WHAT-IF SCENARIOS</h3>
+                <p style={{ margin: '4px 0 0 0', fontSize: '0.7rem', color: 'var(--text-sub)' }}>Adjust parameters to simulate impact.</p>
               </div>
-            ))}
+              <button 
+                onClick={() => setOverrideVars({})}
+                className="btn-outline" 
+                style={{ padding: '4px 8px', fontSize: '0.65rem', display: 'flex', gap: '4px', alignItems: 'center' }}
+              >
+                <RotateCcw size={12} /> RESET
+              </button>
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {activeVariables.filter(v => ['demand', 'unit_price', 'unit_cost', 'operator_cost_per_hour'].includes(v.key)).map(v => {
+                const originalValue = variables.find(orig => orig.key === v.key)?.value || 0;
+                const min = v.key === 'demand' ? 1 : 0;
+                const max = Math.max(originalValue * 3, 100);
+                
+                return (
+                  <div key={v.key}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-sub)', fontWeight: 800 }}>{v.label.toUpperCase()}</span>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-white)', fontWeight: 900 }}>
+                        {v.key === 'demand' ? v.value : formatCurrency(v.value, variables)}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={min}
+                      max={max}
+                      step={v.key === 'demand' ? 1 : 0.5}
+                      value={v.value}
+                      onChange={(e) => handleOverride(v.key, Number(e.target.value))}
+                      style={{ width: '100%', accentColor: 'var(--accent-primary)' }}
+                    />
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
-      </div>
     </motion.div>
   );
 };

@@ -26,6 +26,35 @@ blob and transparently restored on read.
 """
 
 import aiosqlite
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def connect_db(db_path: str):
+    """Establish an async connection to the SQLite database and send the hardware-locked SQLCipher key."""
+    from .license import get_hardware_fingerprint
+    import hashlib
+    import os
+    import uuid
+    from pathlib import Path
+
+    app_data = Path(os.environ.get("APPDATA", Path.home())) / "OPTO-PROFIT"
+    salt_path = app_data / "installation_salt.key"
+    if not salt_path.exists():
+        app_data.mkdir(parents=True, exist_ok=True)
+        salt_path.write_bytes(uuid.uuid4().bytes)
+    dynamic_salt = salt_path.read_bytes()
+
+    try:
+        hwid = get_hardware_fingerprint().encode("utf-8")
+    except Exception:
+        hwid = b"DEFAULT_HWID"
+    
+    key_material = b"SQLCIPHER_" + hwid + b"_" + dynamic_salt
+    key = hashlib.sha256(key_material).hexdigest()
+    
+    async with aiosqlite.connect(db_path) as db:
+        await db.execute(f"PRAGMA key = '{key}'")
+        yield db
 import json
 import os
 import re
@@ -142,7 +171,7 @@ class SQLiteCollection:
 
     async def _ensure(self) -> None:
         """Create the backing table if it does not exist."""
-        async with aiosqlite.connect(self._db_path) as db:
+        async with connect_db(self._db_path) as db:
             await db.execute(
                 f'CREATE TABLE IF NOT EXISTS "{self._name}" '
                 '(doc_id TEXT PRIMARY KEY, data TEXT NOT NULL)'
@@ -167,7 +196,7 @@ class SQLiteCollection:
         """Remove documents whose expires_at has passed (TTL emulation)."""
         now_iso = datetime.now(timezone.utc).isoformat()
         ids_to_delete = []
-        async with aiosqlite.connect(self._db_path) as db:
+        async with connect_db(self._db_path) as db:
             async with db.execute(f'SELECT doc_id, data FROM "{self._name}"') as cur:
                 async for row in cur:
                     doc = _from_json(row[1])
@@ -186,7 +215,7 @@ class SQLiteCollection:
 
     async def find_one(self, filter_dict: dict) -> dict | None:
         await self._ensure()
-        async with aiosqlite.connect(self._db_path) as db:
+        async with connect_db(self._db_path) as db:
             async with db.execute(f'SELECT doc_id, data FROM "{self._name}"') as cur:
                 async for row in cur:
                     doc = self._row_to_doc(row)
@@ -198,7 +227,7 @@ class SQLiteCollection:
         await self._ensure()
         doc = dict(doc)
         doc_id = str(doc.pop("_id", None) or uuid.uuid4())
-        async with aiosqlite.connect(self._db_path) as db:
+        async with connect_db(self._db_path) as db:
             await db.execute(
                 f'INSERT INTO "{self._name}" (doc_id, data) VALUES (?, ?)',
                 (doc_id, _to_json(doc)),
@@ -211,7 +240,7 @@ class SQLiteCollection:
 
     async def insert_many(self, docs: list):
         await self._ensure()
-        async with aiosqlite.connect(self._db_path) as db:
+        async with connect_db(self._db_path) as db:
             for doc in docs:
                 doc = dict(doc)
                 doc_id = str(doc.pop("_id", None) or uuid.uuid4())
@@ -223,7 +252,7 @@ class SQLiteCollection:
 
     async def update_one(self, filter_dict: dict, update_dict: dict, upsert: bool = False):
         await self._ensure()
-        async with aiosqlite.connect(self._db_path) as db:
+        async with connect_db(self._db_path) as db:
             matched_id = None
             matched_doc = None
             async with db.execute(f'SELECT doc_id, data FROM "{self._name}"') as cur:
@@ -254,7 +283,7 @@ class SQLiteCollection:
 
     async def replace_one(self, filter_dict: dict, replacement: dict, upsert: bool = False):
         await self._ensure()
-        async with aiosqlite.connect(self._db_path) as db:
+        async with connect_db(self._db_path) as db:
             matched_id = None
             async with db.execute(f'SELECT doc_id, data FROM "{self._name}"') as cur:
                 async for row in cur:
@@ -281,7 +310,7 @@ class SQLiteCollection:
 
     async def delete_one(self, filter_dict: dict):
         await self._ensure()
-        async with aiosqlite.connect(self._db_path) as db:
+        async with connect_db(self._db_path) as db:
             async with db.execute(f'SELECT doc_id, data FROM "{self._name}"') as cur:
                 async for row in cur:
                     doc = self._row_to_doc(row)
@@ -302,7 +331,7 @@ class SQLiteCollection:
     async def delete_many(self, filter_dict: dict):
         await self._ensure()
         to_delete = []
-        async with aiosqlite.connect(self._db_path) as db:
+        async with connect_db(self._db_path) as db:
             async with db.execute(f'SELECT doc_id, data FROM "{self._name}"') as cur:
                 async for row in cur:
                     doc = self._row_to_doc(row)
@@ -332,7 +361,7 @@ class SQLiteCursor:
     async def to_list(self, length: int | None = None) -> list:
         await self._col._ensure()
         results = []
-        async with aiosqlite.connect(self._col._db_path) as db:
+        async with connect_db(self._col._db_path) as db:
             async with db.execute(f'SELECT doc_id, data FROM "{self._col._name}"') as cur:
                 async for row in cur:
                     doc = self._col._row_to_doc(row)

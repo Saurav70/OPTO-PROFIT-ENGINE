@@ -2,10 +2,10 @@
 
 
 a = Analysis(
-    ['run.py'],
-    pathex=[],
+    ['dist_obf/run.py'],
+    pathex=['dist_obf'],
     binaries=[],
-    datas=[('app', 'app')],
+    datas=[('app/dist', 'app/dist')],
     hiddenimports=['uvicorn.logging', 'uvicorn.loops', 'uvicorn.loops.auto', 'uvicorn.protocols', 'uvicorn.protocols.http', 'uvicorn.protocols.http.auto', 'uvicorn.protocols.websockets', 'uvicorn.protocols.websockets.auto', 'uvicorn.lifespan', 'uvicorn.lifespan.on', 'email_validator', 'aiosqlite', 'slowapi', 'slowapi.util', 'slowapi.errors', 'pyotp', 'webview', 'multipart', 'fastapi.staticfiles', 'fastapi.responses', 'fastapi.middleware', 'fastapi.middleware.cors', 'fastapi.middleware.gzip', 'fastapi.middleware.httpsredirect', 'fastapi.middleware.trustedhost', 'starlette.middleware', 'starlette.middleware.cors', 'starlette.middleware.base', 'starlette.routing', 'starlette.staticfiles', 'starlette.responses', 'starlette.requests', 'cryptography', 'cryptography.hazmat', 'cryptography.hazmat.primitives', 'cryptography.hazmat.primitives.asymmetric', 'cryptography.hazmat.primitives.asymmetric.ed25519', 'cryptography.hazmat.backends'],
     hookspath=[],
     hooksconfig={},

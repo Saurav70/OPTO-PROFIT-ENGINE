@@ -1,0 +1,1698 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: components/FloorLayout.jsx</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: components/FloorLayout.jsx</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import React, { useState, useEffect, useMemo, useRef } from 'react';
+import {
+  Activity,
+  Box,
+  Gauge,
+  Play,
+  Route,
+  Settings2,
+  SlidersHorizontal,
+  Square,
+  Workflow,
+  Grid,
+  AlertTriangle,
+  Plus,
+  Minus,
+  RefreshCw,
+  Save,
+  Download,
+} from 'lucide-react';
+import { motion } from 'framer-motion';
+import { calculateTaktTime, runOptimization } from '../utils/optimizer';
+import EmptyState from './EmptyState';
+import { api } from '../services/api';
+
+const STATION_CARD_WIDTH = 158;
+const STATION_CARD_HEIGHT = 132;
+const DEFAULT_GRID = 20;
+const PX_PER_METER = 42;
+const CARD_COLLISION_PADDING = 18;
+const FALLBACK_DRAG_STEP = 12;
+
+const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+const snapToGridValue = (value, gridSize) => Math.round(value / gridSize) * gridSize;
+
+const createOffsetMap = (count) =>
+  Object.fromEntries(Array.from({ length: count }, (_, idx) => [idx, { x: 0, y: 0 }]));
+
+const getBaseLayoutPositions = (layoutType, total) => {
+  if (layoutType === 'straight') {
+    return Array.from({ length: total }, (_, idx) => ({
+      x: 100 + idx * 250,
+      y: 210,
+    }));
+  }
+
+  if (layoutType === 'u-shape') {
+    const topCount = Math.ceil(total / 2);
+    return Array.from({ length: total }, (_, idx) => {
+      if (idx &lt; topCount) {
+        return {
+          x: 100 + idx * 250,
+          y: 90,
+        };
+      }
+
+      const reverseIdx = total - idx - 1;
+      return {
+        x: 100 + reverseIdx * 250,
+        y: 370,
+      };
+    });
+  }
+
+  const scatterPresets = [
+    { x: 110, y: 120 },
+    { x: 430, y: 70 },
+    { x: 760, y: 180 },
+    { x: 550, y: 430 },
+    { x: 180, y: 360 },
+    { x: 910, y: 410 },
+    { x: 1060, y: 170 },
+  ];
+
+  return Array.from({ length: total }, (_, idx) => {
+    if (scatterPresets[idx]) return scatterPresets[idx];
+    const overflowIdx = idx - scatterPresets.length;
+    return {
+      x: 180 + overflowIdx * 240,
+      y: overflowIdx % 2 === 0 ? 520 : 130,
+    };
+  });
+};
+
+const getStationCenter = (station) => ({
+  x: station.renderX + STATION_CARD_WIDTH / 2,
+  y: station.renderY + STATION_CARD_HEIGHT / 2,
+});
+
+const buildConnectorPath = (fromCenter, toCenter) => {
+  const horizontalGap = Math.abs(toCenter.x - fromCenter.x);
+  const verticalGap = Math.abs(toCenter.y - fromCenter.y);
+
+  if (verticalGap &lt; 80 || horizontalGap &lt; 120) {
+    return `M ${fromCenter.x} ${fromCenter.y} L ${toCenter.x} ${toCenter.y}`;
+  }
+
+  const midX = (fromCenter.x + toCenter.x) / 2;
+  return `M ${fromCenter.x} ${fromCenter.y} L ${midX} ${fromCenter.y} L ${midX} ${toCenter.y} L ${toCenter.x} ${toCenter.y}`;
+};
+
+const getStationRole = (idx, total) => {
+  if (idx === 0) return 'Feed &amp; preparation';
+  if (idx === total - 1) return 'Final verification';
+  return `Assembly cell ${idx + 1}`;
+};
+
+const renderMachineSVG = (type, color = 'var(--accent-primary)') => {
+  switch (type) {
+    case 'robot':
+      return (
+        &lt;svg viewBox="0 0 100 100" width="100%" height="100%" style={{ fill: 'none', stroke: color, strokeWidth: 2 }}>
+          &lt;path d="M20 90 L80 90 L75 80 L25 80 Z" fill="rgba(100,116,139,0.12)" />
+          &lt;circle cx="50" cy="75" r="10" strokeWidth={3} />
+          &lt;line x1="50" y1="75" x2="35" y2="45" strokeWidth={5} />
+          &lt;circle cx="35" cy="45" r="6" fill={color} />
+          &lt;line x1="35" y1="45" x2="65" y2="25" strokeWidth={4} />
+          &lt;circle cx="65" cy="25" r="5" fill={color} />
+          &lt;line x1="65" y1="25" x2="75" y2="25" strokeWidth={3} />
+          &lt;path d="M75 18 L85 25 L75 32" strokeWidth={2} />
+          &lt;circle cx="65" cy="25" r="12" stroke="rgba(168, 85, 247, 0.2)" strokeWidth={1} />
+        &lt;/svg>
+      );
+    case 'conveyor':
+      return (
+        &lt;svg viewBox="0 0 100 100" width="100%" height="100%" style={{ fill: 'none', stroke: color, strokeWidth: 2 }}>
+          &lt;rect x="10" y="35" width="80" height="20" rx="10" strokeWidth={3} fill="rgba(100,116,139,0.06)" />
+          &lt;circle cx="25" cy="45" r="8" />
+          &lt;circle cx="25" cy="45" r="2" fill={color} />
+          &lt;circle cx="50" cy="45" r="8" />
+          &lt;circle cx="50" cy="45" r="2" fill={color} />
+          &lt;circle cx="75" cy="45" r="8" />
+          &lt;circle cx="75" cy="45" r="2" fill={color} />
+          &lt;rect x="40" y="20" width="20" height="15" rx="2" fill="rgba(168, 85, 247, 0.2)" stroke={color} strokeWidth={2} />
+        &lt;/svg>
+      );
+    case 'cnc':
+      return (
+        &lt;svg viewBox="0 0 100 100" width="100%" height="100%" style={{ fill: 'none', stroke: color, strokeWidth: 2 }}>
+          &lt;rect x="15" y="15" width="70" height="70" rx="8" strokeWidth={3} fill="rgba(100,116,139,0.1)" />
+          &lt;rect x="25" y="25" width="50" height="35" rx="4" stroke="rgba(255,255,255,0.15)" fill="rgba(0,0,0,0.2)" />
+          &lt;rect x="25" y="68" width="30" height="10" rx="2" stroke="rgba(255,255,255,0.1)" />
+          &lt;circle cx="65" cy="73" r="3" fill="#ef4444" />
+          &lt;circle cx="73" cy="73" r="3" fill="#10b981" />
+          &lt;line x1="50" y1="25" x2="50" y2="40" strokeWidth={4} />
+          &lt;polygon points="46,40 54,40 50,46" fill={color} stroke="none" />
+        &lt;/svg>
+      );
+    case 'bench':
+      return (
+        &lt;svg viewBox="0 0 100 100" width="100%" height="100%" style={{ fill: 'none', stroke: color, strokeWidth: 2 }}>
+          &lt;rect x="10" y="55" width="80" height="8" rx="2" strokeWidth={2} fill={color} />
+          &lt;line x1="20" y1="63" x2="20" y2="90" strokeWidth={3} />
+          &lt;line x1="80" y1="63" x2="80" y2="90" strokeWidth={3} />
+          &lt;line x1="20" y1="75" x2="80" y2="75" strokeWidth={1} />
+          &lt;rect x="25" y="42" width="12" height="13" rx="1" fill="rgba(100,116,139,0.12)" />
+          &lt;path d="M45 55 L45 35 M42 35 L48 35" strokeWidth={2} />
+          &lt;circle cx="65" cy="45" r="6" fill="rgba(168, 85, 247, 0.15)" />
+          &lt;path d="M65 45 L60 55" />
+        &lt;/svg>
+      );
+    case 'inspector':
+      return (
+        &lt;svg viewBox="0 0 100 100" width="100%" height="100%" style={{ fill: 'none', stroke: color, strokeWidth: 2 }}>
+          &lt;path d="M20 85 L20 25 A 30 30 0 0 1 80 25 L80 85" strokeWidth={4} fill="none" />
+          &lt;rect x="15" y="35" width="10" height="15" rx="2" fill="rgba(100,116,139,0.2)" />
+          &lt;rect x="75" y="35" width="10" height="15" rx="2" fill="rgba(100,116,139,0.2)" />
+          &lt;line x1="25" y1="42" x2="50" y2="42" stroke="rgba(239, 68, 68, 0.5)" strokeWidth={1} strokeDasharray="2 2" />
+          &lt;line x1="75" y1="42" x2="50" y2="42" stroke="rgba(239, 68, 68, 0.5)" strokeWidth={1} strokeDasharray="2 2" />
+          &lt;circle cx="50" cy="70" r="10" fill="rgba(168, 85, 247, 0.15)" />
+          &lt;path d="M45 70 L48 73 L55 67" stroke="#10b981" strokeWidth={2} />
+        &lt;/svg>
+      );
+    default:
+      return (
+        &lt;svg viewBox="0 0 100 100" width="100%" height="100%" style={{ fill: 'none', stroke: color, strokeWidth: 2 }}>
+          &lt;line x1="15" y1="70" x2="85" y2="70" strokeWidth={3} />
+          &lt;circle cx="50" cy="35" r="12" strokeWidth={2.5} fill="rgba(100,116,139,0.06)" />
+          &lt;path d="M30 65 C 30 50, 70 50, 70 65" strokeWidth={2.5} />
+          &lt;circle cx="42" cy="58" r="3" fill={color} />
+          &lt;circle cx="58" cy="58" r="3" fill={color} />
+          &lt;path d="M42 58 L50 63 L58 58" strokeWidth={1.5} />
+        &lt;/svg>
+      );
+  }
+};
+
+/**
+ * FloorLayout component renders an interactive 2D spatial representation of the factory floor.
+ * It visualizes workstations, their distances, and animates process flows based on heuristic optimization metrics.
+ * 
+ * @component
+ * @param {Object} props - Component properties
+ * @param {Array&lt;Object>} [props.tasks=[]] - The list of tasks available for process optimization.
+ * @param {Object} props.config - Current simulation and layout configurations.
+ * @param {Function} props.setConfig - Callback to save updated layout presets/config to the parent state.
+ * @param {Function} props.onNavigate - Navigation callback function to redirect the user to other views.
+ * @param {Object} [props.optimization] - Shared optimization data from parent context (avoids redundant local compute).
+ * @param {boolean} [props.embedded=false] - Determines if the layout is embedded inside another view or stands alone.
+ * @returns {JSX.Element|null} The interactive FloorLayout visualization or an empty state if no tasks exist.
+ */
+const FloorLayout = ({ tasks = [], config, setConfig, onNavigate, optimization: sharedOptimization, embedded = false }) => {
+  const [taktTime, setTaktTime] = useState(0);
+  const [localOptimization, setLocalOptimization] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const compute = async () => {
+      const takt = await calculateTaktTime(config || {});
+      const opt = runOptimization(tasks || [], takt, 'LTF', config || {});
+      if (!cancelled) {
+        setTaktTime(takt);
+        setLocalOptimization(opt);
+      }
+    };
+    compute();
+    return () => { cancelled = true; };
+  }, [tasks, config]);
+
+  // P2-5: Use shared optimization from App if available, otherwise use locally computed
+  const optimization = useMemo(() => {
+    return sharedOptimization || localOptimization || { stations: [], efficiency: '0.00', nActual: 0, totalIdleTime: 0, balanceDelay: '0.00' };
+  }, [sharedOptimization, localOptimization]);
+
+  const [layoutType, setLayoutType] = useState('u-shape');
+  const [showArrows, setShowArrows] = useState(true);
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [selectedStationIdx, setSelectedStationIdx] = useState(0);
+  const [stationMachines, _setStationMachines] = useState({});
+  const [stationOffsets, setStationOffsets] = useState(() =>
+    createOffsetMap(optimization?.stations?.length || 0)
+  );
+
+  const [presetName, setPresetName] = useState('');
+  const [selectedPreset, setSelectedPreset] = useState('');
+
+  const handleSavePreset = async () => {
+    if (!presetName.trim()) return;
+    const presets = config?.layout_presets || {};
+    const newConfig = {
+      ...config,
+      layout_presets: {
+        ...presets,
+        [presetName.trim()]: {
+          layoutType,
+          stationOffsets,
+          timestamp: new Date().toISOString()
+        }
+      }
+    };
+    if (setConfig) setConfig(newConfig);
+    try {
+      await api.put('/api/config', newConfig);
+      setPresetName('');
+    } catch (e) {
+      console.error('Failed to save layout preset', e);
+    }
+  };
+
+  const handleLoadPreset = () => {
+    if (!selectedPreset) return;
+    const preset = config?.layout_presets?.[selectedPreset];
+    if (preset) {
+      setLayoutType(preset.layoutType || 'u-shape');
+      setStationOffsets(preset.stationOffsets || {});
+    }
+  };
+
+  const getStationMachineType = (idx, total) => {
+    if (stationMachines[idx]) return stationMachines[idx];
+    if (idx === 0) return 'conveyor';
+    if (idx === total - 1) return 'inspector';
+    return idx % 2 === 0 ? 'cnc' : 'operator';
+  };
+
+  const clearanceConflicts = useMemo(() => {
+    const conflicts = new Set();
+    if (!optimization || !optimization.stations) return conflicts;
+    
+    // We compute positions first to check distances
+    const total = optimization.stations.length;
+    const basePos = getBaseLayoutPositions(layoutType, total);
+    
+    optimization.stations.forEach((s1, i) => {
+      optimization.stations.forEach((s2, j) => {
+        if (i >= j) return;
+        
+        const b1 = basePos[i] || { x: 100 + i * 250, y: 210 };
+        const o1 = stationOffsets[i] || { x: 0, y: 0 };
+        const absoluteC1 = {
+          x: b1.x + o1.x + STATION_CARD_WIDTH / 2,
+          y: b1.y + o1.y + STATION_CARD_HEIGHT / 2,
+        };
+
+        const b2 = basePos[j] || { x: 100 + j * 250, y: 210 };
+        const o2 = stationOffsets[j] || { x: 0, y: 0 };
+        const absoluteC2 = {
+          x: b2.x + o2.x + STATION_CARD_WIDTH / 2,
+          y: b2.y + o2.y + STATION_CARD_HEIGHT / 2,
+        };
+
+        const dist = Math.hypot(absoluteC2.x - absoluteC1.x, absoluteC2.y - absoluteC1.y);
+        if (dist &lt; 210) { // Safety clearance boundary (2.2m)
+          conflicts.add(i);
+          conflicts.add(j);
+        }
+      });
+    });
+    return conflicts;
+  }, [optimization, layoutType, stationOffsets]);
+  const [snapToGrid] = useState(true);
+  const [gridSize] = useState(DEFAULT_GRID);
+  const [simulationSpeed, setSimulationSpeed] = useState(1);
+  const [viewportWidth, setViewportWidth] = useState(
+    typeof window !== 'undefined' ? window.innerWidth : 1440
+  );
+  const [simulationState, setSimulationState] = useState({
+    phase: 'idle',
+    stationIdx: -1,
+    nextStationIdx: -1,
+    unitPosition: null,
+    status: 'Layout idle',
+    travelMeters: 0,
+    cycle: 0,
+  });
+  const [draggingStationIdx, setDraggingStationIdx] = useState(-1);
+  const [liveDragDelta, setLiveDragDelta] = useState({ x: 0, y: 0 });
+  const dragStartRef = useRef(null);
+
+  // High-fidelity spatial states
+  const [zoom, setZoom] = useState(1.0);
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+  const [isPerformanceMode, setIsPerformanceMode] = useState(true);
+
+  const canvasWrapperRef = useRef(null);
+
+  useEffect(() => {
+    const handleResize = () => setViewportWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // P1-2: Use a ref for zoom so the wheel handler never causes a re-register
+  const zoomRef = useRef(zoom);
+  useEffect(() => { zoomRef.current = zoom; }, [zoom]);
+
+  // Native non-passive wheel event listener to handle smooth zooming without browser scroll blocking
+  useEffect(() => {
+    const wrapper = canvasWrapperRef.current;
+    if (!wrapper) return;
+
+    const handleWheel = (e) => {
+      e.preventDefault();
+      const zoomFactor = 0.05;
+      const nextZoom = e.deltaY &lt; 0 ? zoomRef.current + zoomFactor : zoomRef.current - zoomFactor;
+      setZoom(clamp(nextZoom, 0.5, 2.0));
+    };
+
+    wrapper.addEventListener('wheel', handleWheel, { passive: false });
+    return () => {
+      wrapper.removeEventListener('wheel', handleWheel);
+    };
+  }, []); // P1-2: No zoom dependency — uses zoomRef instead
+
+  // Grid background mouse drag handlers for canvas panning
+  const handleGridMouseDown = (e) => {
+    // Only drag with left-click
+    if (e.button !== 0) return;
+    setIsPanning(true);
+    setPanStart({
+      x: e.clientX - panOffset.x,
+      y: e.clientY - panOffset.y,
+    });
+  };
+
+  const handleGridMouseMove = (e) => {
+    if (!isPanning) return;
+    setPanOffset({
+      x: e.clientX - panStart.x,
+      y: e.clientY - panStart.y,
+    });
+  };
+
+  const handleGridMouseUp = () => {
+    setIsPanning(false);
+  };
+
+  // Touch equivalents for canvas panning on mobile/tablet
+  const handleGridTouchStart = (e) => {
+    if (e.touches.length !== 1) return;
+    const touch = e.touches[0];
+    setIsPanning(true);
+    setPanStart({
+      x: touch.clientX - panOffset.x,
+      y: touch.clientY - panOffset.y,
+    });
+  };
+
+  const handleGridTouchMove = (e) => {
+    if (!isPanning || e.touches.length !== 1) return;
+    e.preventDefault(); // Prevent page scroll while panning canvas
+    const touch = e.touches[0];
+    setPanOffset({
+      x: touch.clientX - panStart.x,
+      y: touch.clientY - panStart.y,
+    });
+  };
+
+  const handleGridTouchEnd = () => {
+    setIsPanning(false);
+  };
+
+  const fitAllToView = () => {
+    setZoom(0.75);
+    setPanOffset({ x: 0, y: 0 });
+  };
+
+  const isStacked = viewportWidth &lt; 900;
+  const safeSelectedStationIdx =
+    optimization.stations.length > 0
+      ? Math.min(Math.max(selectedStationIdx, 0), optimization.stations.length - 1)
+      : -1;
+
+  const stationIndexByTaskId = useMemo(() => {
+    const taskStationMap = {};
+    optimization.stations.forEach((station, idx) => {
+      station.tasks.forEach((task) => {
+        taskStationMap[task.id] = idx;
+      });
+    });
+    return taskStationMap;
+  }, [optimization.stations]);
+
+  const bottleneckTime = useMemo(
+    () => Math.max(...optimization.stations.map((station) => station.time), 0),
+    [optimization.stations]
+  );
+
+  const basePositions = useMemo(
+    () => getBaseLayoutPositions(layoutType, optimization.stations.length),
+    [layoutType, optimization.stations.length]
+  );
+
+  const placedStations = useMemo(
+    () =>
+      optimization.stations.map((station, idx) => {
+        const base = basePositions[idx] || { x: 100 + idx * 250, y: 210 };
+        const offset = stationOffsets[idx] || { x: 0, y: 0 };
+        const uniqueZones = [...new Set(station.tasks.map((task) => task.zoning).filter(Boolean))];
+        const externalHandoffs = station.tasks.reduce((sum, task) => {
+          const handoffs = (task.predecessors || []).filter((predecessorId) => {
+            if (!predecessorId || predecessorId === 'None') return false;
+            const predecessorStation = stationIndexByTaskId[predecessorId];
+            return predecessorStation !== undefined &amp;&amp; predecessorStation !== idx;
+          });
+          return sum + handoffs.length;
+        }, 0);
+        const utilization = taktTime > 0 ? (station.time / taktTime) * 100 : 0;
+        const idleTime = Math.max(0, taktTime - station.time);
+
+        return {
+          ...station,
+          idx,
+          role: getStationRole(idx, optimization.stations.length),
+          x: base.x + offset.x,
+          y: base.y + offset.y,
+          utilization,
+          idleTime,
+          avgTaskTime: station.tasks.length > 0 ? station.time / station.tasks.length : 0,
+          externalHandoffs,
+          uniqueZones,
+          isBottleneck: station.time === bottleneckTime &amp;&amp; bottleneckTime > 0,
+        };
+      }),
+    [basePositions, bottleneckTime, optimization.stations, stationIndexByTaskId, stationOffsets, taktTime]
+  );
+
+  const canvasMetrics = useMemo(() => {
+    if (placedStations.length === 0) {
+      return {
+        renderStations: [],
+        width: 960,
+        height: 620,
+        footprintArea: 0,
+      };
+    }
+
+    const minX = Math.min(...placedStations.map((station) => station.x));
+    const minY = Math.min(...placedStations.map((station) => station.y));
+    const maxX = Math.max(...placedStations.map((station) => station.x + STATION_CARD_WIDTH));
+    const maxY = Math.max(...placedStations.map((station) => station.y + STATION_CARD_HEIGHT));
+    const padding = 100;
+    const shiftX = padding - minX;
+    const shiftY = padding - minY;
+
+    const renderStations = placedStations.map((station) => ({
+      ...station,
+      renderX: station.x + shiftX,
+      renderY: station.y + shiftY,
+    }));
+
+    const widthMeters = Math.max(0, (maxX - minX) / PX_PER_METER);
+    const heightMeters = Math.max(0, (maxY - minY) / PX_PER_METER);
+
+    return {
+      renderStations,
+      width: maxX - minX + padding * 2,
+      height: maxY - minY + padding * 2,
+      footprintArea: widthMeters * heightMeters,
+    };
+  }, [placedStations]);
+
+  const connectors = useMemo(
+    () =>
+      canvasMetrics.renderStations.slice(0, -1).map((station, idx) => {
+        const nextStation = canvasMetrics.renderStations[idx + 1];
+        const fromCenter = getStationCenter(station);
+        const toCenter = getStationCenter(nextStation);
+        const distancePx = Math.hypot(toCenter.x - fromCenter.x, toCenter.y - fromCenter.y);
+        const distanceMeters = distancePx / PX_PER_METER;
+
+        return {
+          idx,
+          fromCenter,
+          toCenter,
+          distanceMeters,
+          path: buildConnectorPath(fromCenter, toCenter),
+        };
+      }),
+    [canvasMetrics.renderStations]
+  );
+
+  const totalTransferDistance = connectors.reduce((sum, connector) => sum + connector.distanceMeters, 0);
+  const idleSimulationState = useMemo(
+    () => ({
+      phase: 'idle',
+      stationIdx: -1,
+      nextStationIdx: -1,
+      unitPosition: canvasMetrics.renderStations[0] ? getStationCenter(canvasMetrics.renderStations[0]) : null,
+      status: 'Layout ready for simulation',
+      travelMeters: 0,
+      cycle: 0,
+    }),
+    [canvasMetrics.renderStations]
+  );
+  const displaySimulationState = isSimulating ? simulationState : idleSimulationState;
+
+  useEffect(() => {
+    if (!isSimulating || canvasMetrics.renderStations.length === 0) return undefined;
+
+    let cancelled = false;
+    const timers = [];
+
+    const schedule = (delay, callback) => {
+      const timerId = setTimeout(() => {
+        if (!cancelled) callback();
+      }, delay);
+      timers.push(timerId);
+    };
+
+    const runTransfer = (fromIdx, toIdx, cycle) => {
+      const toStation = canvasMetrics.renderStations[toIdx];
+      const connector = connectors[fromIdx];
+      const transferMs = clamp((connector.distanceMeters * 260) / simulationSpeed, 380, 1650);
+
+      setSimulationState({
+        phase: 'transfer',
+        stationIdx: fromIdx,
+        nextStationIdx: toIdx,
+        unitPosition: getStationCenter(toStation),
+        status: `Transfer ${fromIdx + 1} -> ${toIdx + 1} | ${connector.distanceMeters.toFixed(1)} m material move`,
+        travelMeters: connector.distanceMeters,
+        cycle,
+      });
+
+      schedule(transferMs, () => runStation(toIdx, cycle));
+    };
+
+    const runStation = (idx, cycle) => {
+      const station = canvasMetrics.renderStations[idx];
+      const processMs = clamp((station.time * 180) / simulationSpeed, 700, 3200);
+
+      setSimulationState({
+        phase: 'processing',
+        stationIdx: idx,
+        nextStationIdx: -1,
+        unitPosition: getStationCenter(station),
+        status: `Processing at Station ${idx + 1} | ${station.time.toFixed(1)} min cycle load`,
+        travelMeters: idx > 0 ? connectors[idx - 1]?.distanceMeters || 0 : 0,
+        cycle,
+      });
+
+      if (idx === canvasMetrics.renderStations.length - 1) {
+        schedule(processMs, () => {
+          setSimulationState({
+            phase: 'complete',
+            stationIdx: idx,
+            nextStationIdx: -1,
+            unitPosition: getStationCenter(station),
+            status: `Unit completed | total material travel ${totalTransferDistance.toFixed(1)} m`,
+            travelMeters: totalTransferDistance,
+            cycle,
+          });
+          schedule(950, () => setIsSimulating(false));
+        });
+        return;
+      }
+
+      schedule(processMs, () => runTransfer(idx, idx + 1, cycle));
+    };
+
+    runStation(0, 1);
+
+    return () => {
+      cancelled = true;
+      timers.forEach(clearTimeout);
+    };
+  }, [canvasMetrics.renderStations, connectors, isSimulating, simulationSpeed, totalTransferDistance]);
+
+  if (!tasks || tasks.length === 0) {
+    if (embedded) return null;
+    return (
+      &lt;EmptyState
+        icon={Grid}
+        title="NO FLOOR LAYOUT AVAILABLE"
+        description="The Floor Layout canvas renders workstation positions based on your process tasks. Define tasks in Process Planning to generate the draggable floor plan."
+        actionText="GO TO PROCESS PLANNING"
+        onAction={() => onNavigate?.('planning')}
+      />
+    );
+  }
+
+  const getBasePosition = (idx) => basePositions[idx] || { x: 100 + idx * 250, y: 210 };
+
+  const doCardsOverlap = (left, right) =>
+    !(
+      left.x + STATION_CARD_WIDTH + CARD_COLLISION_PADDING &lt;= right.x ||
+      right.x + STATION_CARD_WIDTH + CARD_COLLISION_PADDING &lt;= left.x ||
+      left.y + STATION_CARD_HEIGHT + CARD_COLLISION_PADDING &lt;= right.y ||
+      right.y + STATION_CARD_HEIGHT + CARD_COLLISION_PADDING &lt;= left.y
+    );
+
+  const resolveStationOffset = (idx, candidateOffset, offsetMap) => {
+    const base = getBasePosition(idx);
+    const step = snapToGrid ? gridSize : FALLBACK_DRAG_STEP;
+    const snappedOffset = {
+      x: snapToGrid ? snapToGridValue(candidateOffset.x, gridSize) : candidateOffset.x,
+      y: snapToGrid ? snapToGridValue(candidateOffset.y, gridSize) : candidateOffset.y,
+    };
+
+    const isOccupied = (offset) => {
+      const candidateAbsolute = {
+        x: base.x + offset.x,
+        y: base.y + offset.y,
+      };
+
+      return optimization.stations.some((_, otherIdx) => {
+        if (otherIdx === idx) return false;
+        const otherBase = getBasePosition(otherIdx);
+        const otherOffset = offsetMap[otherIdx] || { x: 0, y: 0 };
+        const otherAbsolute = {
+          x: otherBase.x + otherOffset.x,
+          y: otherBase.y + otherOffset.y,
+        };
+        return doCardsOverlap(candidateAbsolute, otherAbsolute);
+      });
+    };
+
+    if (!isOccupied(snappedOffset)) {
+      return snappedOffset;
+    }
+
+    for (let ring = 1; ring &lt;= 12; ring += 1) {
+      for (let dx = -ring; dx &lt;= ring; dx += 1) {
+        for (let dy = -ring; dy &lt;= ring; dy += 1) {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== ring) continue;
+          const shifted = {
+            x: snappedOffset.x + dx * step,
+            y: snappedOffset.y + dy * step,
+          };
+          if (!isOccupied(shifted)) {
+            return shifted;
+          }
+        }
+      }
+    }
+
+    return snappedOffset;
+  };
+
+  const applyStationOffsetDelta = (idx, deltaX, deltaY) => {
+    setStationOffsets((previous) => {
+      const current = previous[idx] || { x: 0, y: 0 };
+      const nextOffset = resolveStationOffset(
+        idx,
+        {
+          x: current.x + deltaX,
+          y: current.y + deltaY,
+        },
+        previous
+      );
+
+      return {
+        ...previous,
+        [idx]: nextOffset,
+      };
+    });
+  };
+
+  const handleStationPointerDown = (idx, e) => {
+    if (isSimulating) return;
+    e.stopPropagation();
+    e.preventDefault();
+    setDraggingStationIdx(idx);
+    setSelectedStationIdx(idx);
+    setLiveDragDelta({ x: 0, y: 0 });
+    dragStartRef.current = { x: e.clientX, y: e.clientY, idx };
+
+    const handlePointerMove = (moveEvent) => {
+      if (!dragStartRef.current) return;
+      const dx = (moveEvent.clientX - dragStartRef.current.x) / zoom;
+      const dy = (moveEvent.clientY - dragStartRef.current.y) / zoom;
+      setLiveDragDelta({ x: dx, y: dy });
+    };
+
+    const handlePointerUp = () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      if (dragStartRef.current) {
+        const draggedIdx = dragStartRef.current.idx;
+        dragStartRef.current = null;
+        // Read the latest delta via setState callback to avoid stale closure
+        setLiveDragDelta((currentDelta) => {
+          applyStationOffsetDelta(draggedIdx, currentDelta.x, currentDelta.y);
+          return { x: 0, y: 0 };
+        });
+      }
+      setDraggingStationIdx(-1);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+  };
+
+  const InnerContent = (
+    &lt;>
+      &lt;style>{`
+        @keyframes optoFlowDash {
+          to {
+            stroke-dashoffset: -40;
+          }
+        }
+        .opto-flow-active {
+          animation: optoFlowDash 1.4s linear infinite;
+        }
+        .opto-flow-transfer {
+          animation: optoFlowDash 0.6s linear infinite;
+        }
+        @keyframes optoPulseClearance {
+          0% {
+            box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+          }
+          70% {
+            box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+          }
+          100% {
+            box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+          }
+        }
+        .opto-collision-pulse {
+          animation: optoPulseClearance 1.5s infinite;
+        }
+      `}&lt;/style>
+
+      &lt;div
+        style={{
+          flex: isStacked ? 'none' : 1,
+          minHeight: 0,
+          display: 'grid',
+          gridTemplateColumns: isStacked ? '1fr' : '360px minmax(0, 1fr)',
+          gridTemplateRows: isStacked ? 'auto minmax(500px, 1fr)' : '1fr',
+          gap: '1px',
+          background: 'var(--border-color)',
+        }}
+      >
+        &lt;div
+          style={{
+            background: 'var(--card-bg)',
+            minHeight: 0,
+            maxHeight: isStacked ? '320px' : 'none',
+            overflowY: isStacked ? 'auto' : 'visible',
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          &lt;div style={{ padding: '1.1rem 1.1rem 0', overflowY: isStacked ? 'visible' : 'auto' }}>
+            &lt;div className="glow-card" style={{ padding: '1rem', marginBottom: '1rem' }}>
+              &lt;div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  marginBottom: '0.85rem',
+                  fontSize: '0.76rem',
+                  fontWeight: 900,
+                  color: 'var(--text-white)',
+                  letterSpacing: '1px',
+                }}
+              >
+                &lt;Route size={15} />
+                FLOW SIMULATION
+              &lt;/div>
+
+              &lt;button
+                onClick={() => setIsSimulating((current) => !current)}
+                style={{
+                  width: '100%',
+                  padding: '0.95rem 1rem',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid transparent',
+                  background: isSimulating ? 'var(--accent-danger)' : 'var(--accent-primary)',
+                  color: '#fff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px',
+                  fontWeight: 900,
+                  letterSpacing: '0.8px',
+                  boxShadow: isSimulating ? '0 10px 30px rgba(239, 68, 68, 0.25)' : 'var(--shadow-glow)',
+                }}
+              >
+                {isSimulating ? &lt;Square size={15} fill="#fff" /> : &lt;Play size={15} fill="#fff" />}
+                {isSimulating ? 'STOP SIMULATION' : 'START SIMULATION'}
+              &lt;/button>
+
+              &lt;div style={{ marginTop: '1rem', display: 'grid', gap: '0.85rem' }}>
+                &lt;div>
+                  &lt;div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
+                    &lt;span style={{ fontSize: '0.68rem', fontWeight: 900, color: 'var(--text-sub)' }}>SIMULATION SPEED&lt;/span>
+                    &lt;span style={{ fontSize: '0.68rem', fontWeight: 900, color: 'var(--text-white)' }}>
+                      {simulationSpeed.toFixed(1)}x
+                    &lt;/span>
+                  &lt;/div>
+                  &lt;input
+                    type="range"
+                    min="0.7"
+                    max="2"
+                    step="0.1"
+                    value={simulationSpeed}
+                    onChange={(event) => setSimulationSpeed(Number(event.target.value))}
+                    style={{ width: '100%', accentColor: 'var(--accent-primary)' }}
+                  />
+                &lt;/div>
+
+                &lt;div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+                  &lt;span style={{ fontSize: '0.68rem', fontWeight: 900, color: 'var(--text-sub)' }}>LAYOUT GEOMETRY&lt;/span>
+                  &lt;select
+                    value={layoutType}
+                    onChange={(event) => setLayoutType(event.target.value)}
+                    style={{
+                      width: '100%',
+                      background: 'var(--bg-secondary)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '0.65rem',
+                      fontSize: '0.72rem',
+                      fontWeight: 800,
+                      color: 'var(--text-white)',
+                      outline: 'none',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    &lt;option value="u-shape">U-Shape Layout&lt;/option>
+                    &lt;option value="straight">Straight Line Layout&lt;/option>
+                    &lt;option value="scatter">Scattered Cluster Layout&lt;/option>
+                  &lt;/select>
+                &lt;/div>
+
+                &lt;label
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    fontSize: '0.68rem',
+                    fontWeight: 900,
+                    color: 'var(--text-sub)',
+                  }}
+                >
+                  DRAW FLOW PATHS
+                  &lt;input
+                    type="checkbox"
+                    checked={showArrows}
+                    onChange={(event) => setShowArrows(event.target.checked)}
+                    style={{ accentColor: 'var(--accent-primary)' }}
+                  />
+                &lt;/label>
+
+                &lt;label
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    fontSize: '0.68rem',
+                    fontWeight: 900,
+                    color: 'var(--text-sub)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  &lt;div>
+                    &lt;span>LOW-GPU MODE&lt;/span>
+                    &lt;div style={{ fontSize: '0.55rem', fontWeight: 800, color: 'var(--accent-warning)', marginTop: '2px', textTransform: 'none', letterSpacing: '0.5px' }}>
+                      Disables animation loops &amp; tokens
+                    &lt;/div>
+                  &lt;/div>
+                  &lt;input
+                    type="checkbox"
+                    checked={isPerformanceMode}
+                    onChange={(event) => setIsPerformanceMode(event.target.checked)}
+                    style={{ accentColor: 'var(--accent-primary)', width: '15px', height: '15px' }}
+                  />
+                &lt;/label>
+
+                &lt;div
+                  style={{
+                    padding: '0.75rem',
+                    borderRadius: 'var(--radius-md)',
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-color)',
+                  }}
+                >
+                  &lt;div style={{ fontSize: '0.62rem', fontWeight: 900, color: 'var(--text-sub)', letterSpacing: '0.8px' }}>
+                    LIVE STATUS
+                  &lt;/div>
+                  &lt;div style={{ marginTop: '0.35rem', fontSize: '0.78rem', fontWeight: 800, color: 'var(--text-white)', lineHeight: 1.45 }}>
+                    {displaySimulationState.status}
+                  &lt;/div>
+                &lt;/div>
+
+                {clearanceConflicts.size > 0 &amp;&amp; (
+                  &lt;div
+                    style={{
+                      marginTop: '0.75rem',
+                      padding: '0.65rem 0.85rem',
+                      borderRadius: 'var(--radius-sm)',
+                      background: 'rgba(239, 68, 68, 0.12)',
+                      border: '1px solid rgba(239, 68, 68, 0.3)',
+                      color: 'var(--accent-danger)',
+                      fontSize: '0.68rem',
+                      fontWeight: 800,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      lineHeight: '1.3'
+                    }}
+                  >
+                    &lt;AlertTriangle size={13} style={{ flexShrink: 0 }} />
+                    &lt;span>
+                      &lt;strong>SAFETY CODE ALERT:&lt;/strong> {clearanceConflicts.size} cells are violating safety clearance boundaries (&amp;lt; 2.2m buffer).
+                    &lt;/span>
+                  &lt;/div>
+                )}
+              &lt;/div>
+            &lt;/div>
+
+            {/* Layout Presets Panel */}
+            &lt;div className="glow-card" style={{ padding: '1rem', marginBottom: '1rem' }}>
+              &lt;div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  marginBottom: '0.85rem',
+                  fontSize: '0.76rem',
+                  fontWeight: 900,
+                  color: 'var(--text-white)',
+                  letterSpacing: '1px',
+                }}
+              >
+                &lt;Save size={15} />
+                LAYOUT PRESETS
+              &lt;/div>
+
+              &lt;div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                &lt;div style={{ display: 'flex', gap: '6px' }}>
+                  &lt;input
+                    type="text"
+                    value={presetName}
+                    onChange={(e) => setPresetName(e.target.value)}
+                    placeholder="New preset name..."
+                    style={{
+                      flex: 1,
+                      background: 'var(--bg-secondary)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '0.5rem 0.65rem',
+                      fontSize: '0.7rem',
+                      color: 'var(--text-white)',
+                      outline: 'none',
+                    }}
+                  />
+                  &lt;button
+                    onClick={handleSavePreset}
+                    disabled={!presetName.trim()}
+                    style={{
+                      background: presetName.trim() ? 'var(--accent-primary)' : 'var(--bg-secondary)',
+                      border: 'none',
+                      color: '#fff',
+                      padding: '0 0.8rem',
+                      borderRadius: 'var(--radius-sm)',
+                      cursor: presetName.trim() ? 'pointer' : 'not-allowed',
+                      fontSize: '0.65rem',
+                      fontWeight: 900,
+                    }}
+                  >
+                    SAVE
+                  &lt;/button>
+                &lt;/div>
+
+                &lt;div style={{ display: 'flex', gap: '6px' }}>
+                  &lt;select
+                    value={selectedPreset}
+                    onChange={(e) => setSelectedPreset(e.target.value)}
+                    style={{
+                      flex: 1,
+                      background: 'var(--bg-secondary)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '0.5rem 0.65rem',
+                      fontSize: '0.7rem',
+                      color: 'var(--text-white)',
+                      outline: 'none',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    &lt;option value="">-- Load a preset --&lt;/option>
+                    {Object.keys(config?.layout_presets || {}).map(p => (
+                      &lt;option key={p} value={p}>{p}&lt;/option>
+                    ))}
+                  &lt;/select>
+                  &lt;button
+                    onClick={handleLoadPreset}
+                    disabled={!selectedPreset}
+                    style={{
+                      background: selectedPreset ? 'var(--accent-secondary)' : 'var(--bg-secondary)',
+                      border: 'none',
+                      color: '#fff',
+                      padding: '0 0.8rem',
+                      borderRadius: 'var(--radius-sm)',
+                      cursor: selectedPreset ? 'pointer' : 'not-allowed',
+                      fontSize: '0.65rem',
+                      fontWeight: 900,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                  >
+                    &lt;Download size={12} />
+                    LOAD
+                  &lt;/button>
+                &lt;/div>
+              &lt;/div>
+            &lt;/div>
+
+            &lt;div className="glow-card" style={{ padding: '1rem', marginBottom: '1rem' }}>
+              &lt;div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  marginBottom: '0.85rem',
+                  fontSize: '0.76rem',
+                  fontWeight: 900,
+                  color: 'var(--text-white)',
+                  letterSpacing: '1px',
+                }}
+              >
+                &lt;Workflow size={15} />
+                ACTIVE STATIONS
+              &lt;/div>
+
+              &lt;div style={{ display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
+                {canvasMetrics.renderStations.map((station) => (
+                  &lt;button
+                    key={station.idx}
+                    onClick={() => setSelectedStationIdx(station.idx)}
+                    style={{
+                      borderRadius: 'var(--radius-md)',
+                      border: `1px solid ${
+                        safeSelectedStationIdx === station.idx ? 'var(--accent-primary)' : 'var(--border-color)'
+                      }`,
+                      background:
+                        safeSelectedStationIdx === station.idx ? 'rgba(13, 148, 136, 0.08)' : 'var(--bg-secondary)',
+                      padding: '0.85rem',
+                      textAlign: 'left',
+                    }}
+                  >
+                    &lt;div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', alignItems: 'center' }}>
+                      &lt;div>
+                        &lt;div style={{ fontSize: '0.63rem', fontWeight: 900, color: 'var(--text-sub)', letterSpacing: '0.8px' }}>
+                          STATION {station.idx + 1}
+                        &lt;/div>
+                        &lt;div style={{ marginTop: '0.2rem', fontSize: '0.84rem', fontWeight: 900, color: 'var(--text-white)' }}>
+                          {station.role}
+                        &lt;/div>
+                      &lt;/div>
+                      &lt;div
+                        style={{
+                          fontSize: '0.68rem',
+                          fontWeight: 900,
+                          color: station.utilization > 95 ? 'var(--accent-warning)' : 'var(--accent-primary)',
+                        }}
+                      >
+                        {station.utilization.toFixed(0)}%
+                      &lt;/div>
+                    &lt;/div>
+
+                    &lt;div className="telemetry-stats-grid" style={{ marginTop: '0.65rem' }}>
+                      &lt;div style={{ padding: '0.45rem', borderRadius: 'var(--radius-sm)', background: 'var(--card-bg)' }}>
+                        &lt;div style={{ fontSize: '0.55rem', fontWeight: 900, color: 'var(--text-sub)' }}>LOAD&lt;/div>
+                        &lt;div style={{ marginTop: '0.15rem', fontSize: '0.75rem', fontWeight: 900, color: 'var(--text-white)' }}>
+                          {station.time.toFixed(1)}m
+                        &lt;/div>
+                      &lt;/div>
+                      &lt;div style={{ padding: '0.45rem', borderRadius: 'var(--radius-sm)', background: 'var(--card-bg)' }}>
+                        &lt;div style={{ fontSize: '0.55rem', fontWeight: 900, color: 'var(--text-sub)' }}>IDLE&lt;/div>
+                        &lt;div style={{ marginTop: '0.15rem', fontSize: '0.75rem', fontWeight: 900, color: 'var(--text-white)' }}>
+                          {station.idleTime.toFixed(1)}m
+                        &lt;/div>
+                      &lt;/div>
+                      &lt;div style={{ padding: '0.45rem', borderRadius: 'var(--radius-sm)', background: 'var(--card-bg)' }}>
+                        &lt;div style={{ fontSize: '0.55rem', fontWeight: 900, color: 'var(--text-sub)' }}>TASKS&lt;/div>
+                        &lt;div style={{ marginTop: '0.15rem', fontSize: '0.75rem', fontWeight: 900, color: 'var(--text-white)' }}>
+                          {station.tasks.length}
+                        &lt;/div>
+                      &lt;/div>
+                    &lt;/div>
+                  &lt;/button>
+                ))}
+              &lt;/div>
+            &lt;/div>
+          &lt;/div>
+        &lt;/div>
+
+        &lt;div
+          style={{
+            minHeight: isStacked ? '500px' : 0,
+            display: 'flex',
+            flexDirection: 'column',
+            background: 'var(--bg-main)',
+            position: 'relative',
+          }}
+        >
+          &lt;div
+            ref={canvasWrapperRef}
+            onMouseDown={handleGridMouseDown}
+            onMouseMove={handleGridMouseMove}
+            onMouseUp={handleGridMouseUp}
+            onMouseLeave={handleGridMouseUp}
+            onTouchStart={handleGridTouchStart}
+            onTouchMove={handleGridTouchMove}
+            onTouchEnd={handleGridTouchEnd}
+            style={{
+              flex: 1,
+              minHeight: isStacked ? '500px' : '480px',
+              overflow: 'auto',
+              padding: '1rem',
+              position: 'relative',
+              background:
+                'radial-gradient(circle at top left, rgba(13, 148, 136, 0.12), transparent 30%), var(--bg-main)',
+              cursor: isPanning ? 'grabbing' : 'grab',
+              touchAction: 'none', // Prevent browser scroll interfering with canvas touch pan
+            }}
+          >
+            {/* Zoom / Pan Workspace Grid Canvas */}
+            &lt;div
+              style={{
+                position: 'absolute',
+                left: '1rem',
+                top: '1rem',
+                width: Math.max(canvasMetrics.width, 800),
+                height: Math.max(canvasMetrics.height, 560),
+                borderRadius: '20px',
+                border: '1px solid var(--border-color)',
+                overflow: 'visible',
+                backgroundColor: 'var(--bg-primary)',
+                backgroundImage:
+                  'linear-gradient(rgba(100, 116, 139, 0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(100, 116, 139, 0.08) 1px, transparent 1px)',
+                backgroundSize: `${gridSize}px ${gridSize}px`,
+                transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`,
+                transformOrigin: 'top left',
+                transition: isPanning ? 'none' : 'transform 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
+              }}
+            >
+              &lt;div
+                style={{
+                  position: 'absolute',
+                  inset: '1rem',
+                  borderRadius: '16px',
+                  border: '1px dashed rgba(100, 116, 139, 0.24)',
+                  pointerEvents: 'none',
+                }}
+              />
+
+              {showArrows &amp;&amp; (
+                &lt;svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
+                  &lt;defs>
+                    &lt;marker id="flowArrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+                      &lt;polygon points="0 0, 8 3, 0 6" fill="var(--accent-primary)" />
+                    &lt;/marker>
+                  &lt;/defs>
+                  {connectors.map((connector) => {
+                    const isActiveTransfer =
+                      displaySimulationState.phase === 'transfer' &amp;&amp;
+                      connector.idx === displaySimulationState.stationIdx &amp;&amp;
+                      displaySimulationState.nextStationIdx === connector.idx + 1;
+
+                    return (
+                      &lt;g key={`connector-${connector.idx}`}>
+                        &lt;path
+                          d={connector.path}
+                          stroke="rgba(100, 116, 139, 0.35)"
+                          strokeWidth="3"
+                          strokeDasharray="6 10"
+                          fill="none"
+                          markerEnd="url(#flowArrow)"
+                        />
+                        &lt;path
+                          d={connector.path}
+                          stroke={isActiveTransfer ? 'var(--accent-warning)' : 'var(--accent-primary)'}
+                          strokeWidth={isActiveTransfer ? 4 : 3}
+                          strokeDasharray={isActiveTransfer ? '8 8' : '6 12'}
+                          fill="none"
+                          className={isActiveTransfer ? 'opto-flow-transfer' : 'opto-flow-active'}
+                        />
+                      &lt;/g>
+                    );
+                  })}
+                &lt;/svg>
+              )}
+
+              {/* Simulation material item - hidden in Low-GPU Performance Mode */}
+              {!isPerformanceMode &amp;&amp; displaySimulationState.unitPosition &amp;&amp; (
+                &lt;motion.div
+                  animate={{
+                    left: displaySimulationState.unitPosition.x - 19,
+                    top: displaySimulationState.unitPosition.y - 19,
+                    scale: displaySimulationState.phase === 'processing' ? [1, 1.08, 1] : 1,
+                  }}
+                  transition={{
+                    left: {
+                      type: displaySimulationState.phase === 'transfer' ? 'spring' : 'tween',
+                      stiffness: 120,
+                      damping: 22,
+                      duration: displaySimulationState.phase === 'transfer' ? undefined : 0.35,
+                    },
+                    top: {
+                      type: displaySimulationState.phase === 'transfer' ? 'spring' : 'tween',
+                      stiffness: 120,
+                      damping: 22,
+                      duration: displaySimulationState.phase === 'transfer' ? undefined : 0.35,
+                    },
+                    scale: { repeat: displaySimulationState.phase === 'processing' ? Infinity : 0, duration: 1.1 },
+                  }}
+                  style={{
+                    position: 'absolute',
+                    width: '38px',
+                    height: '38px',
+                    borderRadius: '12px',
+                    background:
+                      displaySimulationState.phase === 'transfer' ? 'var(--accent-warning)' : 'var(--accent-primary)',
+                    boxShadow:
+                      displaySimulationState.phase === 'transfer'
+                        ? '0 14px 40px rgba(245, 158, 11, 0.45)'
+                        : '0 14px 40px rgba(13, 148, 136, 0.35)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 60,
+                    border: '2px solid rgba(255,255,255,0.8)',
+                  }}
+                >
+                  &lt;Settings2 size={18} color="#fff" />
+                &lt;/motion.div>
+              )}
+
+              {canvasMetrics.renderStations.map((station) => {
+                const isSelected = station.idx === safeSelectedStationIdx;
+                const isActive = station.idx === displaySimulationState.stationIdx;
+                const nextDistance = connectors[station.idx]?.distanceMeters || 0;
+
+                return (
+                  &lt;motion.div
+                    key={`station-${station.idx}`}
+                    onPointerDown={(e) => handleStationPointerDown(station.idx, e)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedStationIdx(station.idx);
+                    }}
+                    animate={{
+                      left: station.renderX + (draggingStationIdx === station.idx ? liveDragDelta.x : 0),
+                      top: station.renderY + (draggingStationIdx === station.idx ? liveDragDelta.y : 0),
+                      scale: draggingStationIdx === station.idx ? 1.03 : 1,
+                      borderColor: clearanceConflicts.has(station.idx) ? 'var(--accent-danger)' : isActive ? 'var(--accent-primary)' : isSelected ? 'var(--accent-warning)' : 'var(--border-color)',
+                    }}
+                    transition={draggingStationIdx === station.idx ? { type: 'tween', duration: 0 } : { type: 'spring', stiffness: 340, damping: 32 }}
+                    className={`glow-card ${clearanceConflicts.has(station.idx) ? 'opto-collision-pulse' : ''}`}
+                    style={{
+                      position: 'absolute',
+                      width: `${STATION_CARD_WIDTH}px`,
+                      height: `${STATION_CARD_HEIGHT}px`,
+                      padding: 0,
+                      overflow: 'hidden',
+                      cursor: isSimulating ? 'default' : draggingStationIdx === station.idx ? 'grabbing' : 'grab',
+                      zIndex: draggingStationIdx === station.idx ? 40 : isSelected ? 20 : 10,
+                      userSelect: 'none',
+                      boxShadow: draggingStationIdx === station.idx
+                        ? '0 24px 45px rgba(13, 148, 136, 0.28)'
+                        : clearanceConflicts.has(station.idx)
+                          ? '0 0 15px rgba(239, 68, 68, 0.4)'
+                          : isSelected
+                            ? '0 20px 40px rgba(245, 158, 11, 0.16)'
+                            : isActive
+                              ? '0 20px 40px rgba(13, 148, 136, 0.18)'
+                              : 'var(--shadow-glow)',
+                    }}
+                  >
+                    {/* Safety Clearance Ring (1.2m radius / 100px) */}
+                    &lt;div
+                      style={{
+                        position: 'absolute',
+                        left: -21,
+                        top: -34,
+                        width: '200px',
+                        height: '200px',
+                        borderRadius: '50%',
+                        border: clearanceConflicts.has(station.idx) ? '2px dashed var(--accent-danger)' : '1px dashed rgba(13, 148, 136, 0.12)',
+                        background: clearanceConflicts.has(station.idx) ? 'rgba(239, 68, 68, 0.04)' : 'rgba(13, 148, 136, 0.01)',
+                        pointerEvents: 'none',
+                        zIndex: 0,
+                        transition: 'border-color 0.2s, background-color 0.2s'
+                      }}
+                    />
+
+                    {/* Technical CAD Watermark Background */}
+                    &lt;div
+                      style={{
+                        position: 'absolute',
+                        right: '-8px',
+                        bottom: '-8px',
+                        width: '68px',
+                        height: '68px',
+                        opacity: 0.08,
+                        pointerEvents: 'none',
+                        zIndex: 0,
+                        transform: 'rotate(-5deg)'
+                      }}
+                    >
+                      {renderMachineSVG(getStationMachineType(station.idx, optimization.stations.length), 'var(--text-white)')}
+                    &lt;/div>
+
+                    &lt;div
+                      style={{
+                        position: 'relative',
+                        zIndex: 2,
+                        padding: '0.5rem 0.65rem',
+                        background:
+                          isActive
+                            ? 'rgba(13, 148, 136, 0.12)'
+                            : isSelected
+                              ? 'rgba(245, 158, 11, 0.12)'
+                              : 'var(--bg-secondary)',
+                        borderBottom: '1px solid var(--border-color)',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        gap: '0.45rem',
+                        alignItems: 'center',
+                      }}
+                    >
+                      &lt;div>
+                        &lt;div style={{ fontSize: '0.52rem', fontWeight: 900, color: 'var(--text-sub)', letterSpacing: '0.7px' }}>
+                          STATION {station.idx + 1}
+                        &lt;/div>
+                        &lt;div style={{ marginTop: '0.1rem', fontSize: '0.66rem', fontWeight: 900, color: 'var(--text-white)' }}>
+                          {station.role}
+                        &lt;/div>
+                      &lt;/div>
+ 
+                      &lt;div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                        {station.isBottleneck &amp;&amp; (
+                          &lt;div
+                            style={{
+                              padding: '0.16rem 0.3rem',
+                              borderRadius: '999px',
+                              background: 'rgba(239, 68, 68, 0.12)',
+                              color: 'var(--accent-danger)',
+                              fontSize: '0.44rem',
+                              fontWeight: 900,
+                              letterSpacing: '0.4px',
+                            }}
+                          >
+                            BOT
+                          &lt;/div>
+                        )}
+                        &lt;div 
+                          style={{ 
+                            width: '16px', 
+                            height: '16px', 
+                            color: isActive ? 'var(--accent-primary)' : 'var(--text-sub)', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center' 
+                          }}
+                        >
+                          {renderMachineSVG(getStationMachineType(station.idx, optimization.stations.length), isActive ? 'var(--accent-primary)' : 'var(--text-sub)')}
+                        &lt;/div>
+                      &lt;/div>
+                    &lt;/div>
+
+                    &lt;div style={{ padding: '0.55rem 0.65rem 0.6rem', display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+                      &lt;div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                        {station.tasks.slice(0, 2).map((task) => (
+                          &lt;div key={task.id} style={{ display: 'flex', gap: '0.3rem', fontSize: '0.58rem', color: 'var(--text-main)' }}>
+                            &lt;span style={{ minWidth: '16px', fontWeight: 900, color: 'var(--accent-primary)' }}>{task.id}&lt;/span>
+                            &lt;span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{task.name}&lt;/span>
+                          &lt;/div>
+                        ))}
+                        {station.tasks.length > 2 &amp;&amp; (
+                          &lt;div style={{ fontSize: '0.54rem', color: 'var(--text-sub)', fontWeight: 800 }}>
+                            +{station.tasks.length - 2} more
+                          &lt;/div>
+                        )}
+                      &lt;/div>
+
+                      &lt;div className="telemetry-stats-grid" style={{ gap: '0.25rem' }}>
+                        {[
+                          { label: 'UTIL', value: `${station.utilization.toFixed(0)}%`, icon: Gauge },
+                          { label: 'IDLE', value: `${station.idleTime.toFixed(1)}m`, icon: Activity },
+                          {
+                            label: 'NEXT',
+                            value: station.idx &lt; canvasMetrics.renderStations.length - 1 ? `${nextDistance.toFixed(1)}m` : 'END',
+                            icon: SlidersHorizontal,
+                          },
+                        ].map((item) => {
+                          const Icon = item.icon;
+                          return (
+                            &lt;div
+                              key={item.label}
+                              style={{
+                                background: 'var(--bg-secondary)',
+                                borderRadius: 'var(--radius-sm)',
+                                border: '1px solid var(--border-color)',
+                                padding: '0.32rem 0.36rem',
+                              }}
+                            >
+                              &lt;div style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '0.44rem', fontWeight: 900, color: 'var(--text-sub)' }}>
+                                &lt;Icon size={9} />
+                                {item.label}
+                              &lt;/div>
+                              &lt;div style={{ marginTop: '0.16rem', fontSize: '0.58rem', fontWeight: 900, color: 'var(--text-white)' }}>
+                                {item.value}
+                              &lt;/div>
+                            &lt;/div>
+                          );
+                        })}
+                      &lt;/div>
+
+                      &lt;div>
+                        &lt;div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.5rem', fontWeight: 900, color: 'var(--text-sub)' }}>
+                          &lt;span>Load / takt&lt;/span>
+                          &lt;span>{station.time.toFixed(1)}/{taktTime.toFixed(1)}m&lt;/span>
+                        &lt;/div>
+                        &lt;div
+                          style={{
+                            marginTop: '0.22rem',
+                            height: '6px',
+                            borderRadius: '999px',
+                            background: 'var(--bg-tertiary)',
+                            overflow: 'hidden',
+                          }}
+                        >
+                          &lt;div
+                            style={{
+                              height: '100%',
+                              width: `${Math.min(station.utilization, 100)}%`,
+                              background: station.utilization > 95 ? 'var(--accent-warning)' : 'var(--accent-primary)',
+                            }}
+                          />
+                        &lt;/div>
+                        &lt;div style={{ marginTop: '0.28rem', fontSize: '0.48rem', color: 'var(--text-sub)' }}>
+                          {station.uniqueZones.length > 0 ? `${station.uniqueZones.length} zone rule(s)` : 'No zone restriction'}
+                        &lt;/div>
+                      &lt;/div>
+                    &lt;/div>
+                  &lt;/motion.div>
+                );
+              })}
+            &lt;/div>
+
+            {/* Floating Zoom &amp; Pan HUD Controls */}
+            &lt;div
+              style={{
+                position: 'absolute',
+                bottom: '1.25rem',
+                right: '1.25rem',
+                display: 'flex',
+                gap: '0.45rem',
+                background: 'rgba(15, 23, 42, 0.82)',
+                backdropFilter: 'blur(16px)',
+                border: '1px solid var(--border-color)',
+                borderRadius: 'var(--radius-md)',
+                padding: '0.45rem',
+                zIndex: 100,
+                boxShadow: '0 8px 30px rgba(0,0,0,0.3)',
+              }}
+            >
+              &lt;button
+                onClick={(e) => { e.stopPropagation(); setZoom((z) => clamp(z + 0.1, 0.5, 2.0)); }}
+                title="Zoom In"
+                style={{
+                  background: 'var(--bg-secondary)',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--text-white)',
+                  width: '28px',
+                  height: '28px',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                &lt;Plus size={14} />
+              &lt;/button>
+              &lt;button
+                onClick={(e) => { e.stopPropagation(); setZoom((z) => clamp(z - 0.1, 0.5, 2.0)); }}
+                title="Zoom Out"
+                style={{
+                  background: 'var(--bg-secondary)',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--text-white)',
+                  width: '28px',
+                  height: '28px',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                &lt;Minus size={14} />
+              &lt;/button>
+              &lt;button
+                onClick={(e) => { e.stopPropagation(); setZoom(1.0); setPanOffset({ x: 0, y: 0 }); }}
+                title="Reset Workspace (1:1)"
+                style={{
+                  background: 'var(--bg-secondary)',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--text-white)',
+                  height: '28px',
+                  padding: '0 0.6rem',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '0.62rem',
+                  fontWeight: 900,
+                  gap: '5px',
+                }}
+              >
+                &lt;RefreshCw size={11} />
+                {(zoom * 100).toFixed(0)}%
+              &lt;/button>
+              &lt;button
+                onClick={(e) => { e.stopPropagation(); fitAllToView(); }}
+                title="Fit all stations into view"
+                style={{
+                  background: 'var(--accent-primary)',
+                  border: 'none',
+                  color: '#fff',
+                  height: '28px',
+                  padding: '0 0.6rem',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '0.62rem',
+                  fontWeight: 900,
+                  gap: '5px',
+                }}
+              >
+                FIT ALL
+              &lt;/button>
+            &lt;/div>
+
+
+          &lt;/div>
+
+
+        &lt;/div>
+      &lt;/div>
+    &lt;/>
+  );
+
+  if (embedded) {
+    return (
+      &lt;div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100%',
+          background: 'var(--bg-main)',
+          borderRadius: 'var(--radius-lg)',
+          overflow: isStacked ? 'auto' : 'hidden',
+          border: '1px solid var(--border-color)',
+          transition: 'var(--transition-smooth)',
+        }}
+      >
+        {InnerContent}
+      &lt;/div>
+    );
+  }
+
+  return (
+    &lt;motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        background: 'var(--bg-main)',
+        borderRadius: 'var(--radius-lg)',
+        overflow: isStacked ? 'auto' : 'hidden',
+        border: '1px solid var(--border-color)',
+        transition: 'var(--transition-smooth)',
+      }}
+    >
+      {InnerContent}
+    &lt;/motion.div>
+  );
+};
+
+export default FloorLayout;
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#EmptyState">EmptyState</a></li><li><a href="global.html#FloorLayout">FloorLayout</a></li><li><a href="global.html#LineOptimization">LineOptimization</a></li><li><a href="global.html#MetricDelta">MetricDelta</a></li><li><a href="global.html#ToastContainer">ToastContainer</a></li><li><a href="global.html#ToastItem">ToastItem</a></li><li><a href="global.html#buildContext">buildContext</a></li><li><a href="global.html#evaluateFormula">evaluateFormula</a></li><li><a href="global.html#formatCurrency">formatCurrency</a></li><li><a href="global.html#getVariable">getVariable</a></li><li><a href="global.html#getVariableValue">getVariableValue</a></li><li><a href="global.html#useToast">useToast</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Sat Jul 04 2026 15:15:32 GMT+0530 (India Standard Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

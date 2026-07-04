@@ -14,10 +14,13 @@ import {
   Plus,
   Minus,
   RefreshCw,
+  Save,
+  Download,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { calculateTaktTime, runOptimization } from '../utils/optimizer';
 import EmptyState from './EmptyState';
+import { api } from '../services/api';
 
 const STATION_CARD_WIDTH = 158;
 const STATION_CARD_HEIGHT = 132;
@@ -181,7 +184,21 @@ const renderMachineSVG = (type, color = 'var(--accent-primary)') => {
   }
 };
 
-const FloorLayout = ({ tasks = [], config, onNavigate, optimization: sharedOptimization }) => {
+/**
+ * FloorLayout component renders an interactive 2D spatial representation of the factory floor.
+ * It visualizes workstations, their distances, and animates process flows based on heuristic optimization metrics.
+ * 
+ * @component
+ * @param {Object} props - Component properties
+ * @param {Array<Object>} [props.tasks=[]] - The list of tasks available for process optimization.
+ * @param {Object} props.config - Current simulation and layout configurations.
+ * @param {Function} props.setConfig - Callback to save updated layout presets/config to the parent state.
+ * @param {Function} props.onNavigate - Navigation callback function to redirect the user to other views.
+ * @param {Object} [props.optimization] - Shared optimization data from parent context (avoids redundant local compute).
+ * @param {boolean} [props.embedded=false] - Determines if the layout is embedded inside another view or stands alone.
+ * @returns {JSX.Element|null} The interactive FloorLayout visualization or an empty state if no tasks exist.
+ */
+const FloorLayout = ({ tasks = [], config, setConfig, onNavigate, optimization: sharedOptimization, embedded = false }) => {
   const [taktTime, setTaktTime] = useState(0);
   const [localOptimization, setLocalOptimization] = useState(null);
 
@@ -212,6 +229,41 @@ const FloorLayout = ({ tasks = [], config, onNavigate, optimization: sharedOptim
   const [stationOffsets, setStationOffsets] = useState(() =>
     createOffsetMap(optimization?.stations?.length || 0)
   );
+
+  const [presetName, setPresetName] = useState('');
+  const [selectedPreset, setSelectedPreset] = useState('');
+
+  const handleSavePreset = async () => {
+    if (!presetName.trim()) return;
+    const presets = config?.layout_presets || {};
+    const newConfig = {
+      ...config,
+      layout_presets: {
+        ...presets,
+        [presetName.trim()]: {
+          layoutType,
+          stationOffsets,
+          timestamp: new Date().toISOString()
+        }
+      }
+    };
+    if (setConfig) setConfig(newConfig);
+    try {
+      await api.put('/api/config', newConfig);
+      setPresetName('');
+    } catch (e) {
+      console.error('Failed to save layout preset', e);
+    }
+  };
+
+  const handleLoadPreset = () => {
+    if (!selectedPreset) return;
+    const preset = config?.layout_presets?.[selectedPreset];
+    if (preset) {
+      setLayoutType(preset.layoutType || 'u-shape');
+      setStationOffsets(preset.stationOffsets || {});
+    }
+  };
 
   const getStationMachineType = (idx, total) => {
     if (stationMachines[idx]) return stationMachines[idx];
@@ -271,6 +323,8 @@ const FloorLayout = ({ tasks = [], config, onNavigate, optimization: sharedOptim
     cycle: 0,
   });
   const [draggingStationIdx, setDraggingStationIdx] = useState(-1);
+  const [liveDragDelta, setLiveDragDelta] = useState({ x: 0, y: 0 });
+  const dragStartRef = useRef(null);
 
   // High-fidelity spatial states
   const [zoom, setZoom] = useState(1.0);
@@ -565,6 +619,7 @@ const FloorLayout = ({ tasks = [], config, onNavigate, optimization: sharedOptim
   }, [canvasMetrics.renderStations, connectors, isSimulating, simulationSpeed, totalTransferDistance]);
 
   if (!tasks || tasks.length === 0) {
+    if (embedded) return null;
     return (
       <EmptyState
         icon={Grid}
@@ -653,26 +708,43 @@ const FloorLayout = ({ tasks = [], config, onNavigate, optimization: sharedOptim
     });
   };
 
-  const handleDragEnd = (idx, info) => {
-    applyStationOffsetDelta(idx, info.offset.x / zoom, info.offset.y / zoom);
+  const handleStationPointerDown = (idx, e) => {
+    if (isSimulating) return;
+    e.stopPropagation();
+    e.preventDefault();
+    setDraggingStationIdx(idx);
+    setSelectedStationIdx(idx);
+    setLiveDragDelta({ x: 0, y: 0 });
+    dragStartRef.current = { x: e.clientX, y: e.clientY, idx };
+
+    const handlePointerMove = (moveEvent) => {
+      if (!dragStartRef.current) return;
+      const dx = (moveEvent.clientX - dragStartRef.current.x) / zoom;
+      const dy = (moveEvent.clientY - dragStartRef.current.y) / zoom;
+      setLiveDragDelta({ x: dx, y: dy });
+    };
+
+    const handlePointerUp = () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      if (dragStartRef.current) {
+        const draggedIdx = dragStartRef.current.idx;
+        dragStartRef.current = null;
+        // Read the latest delta via setState callback to avoid stale closure
+        setLiveDragDelta((currentDelta) => {
+          applyStationOffsetDelta(draggedIdx, currentDelta.x, currentDelta.y);
+          return { x: 0, y: 0 };
+        });
+      }
+      setDraggingStationIdx(-1);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
   };
 
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100%',
-        background: 'var(--bg-main)',
-        borderRadius: 'var(--radius-lg)',
-        overflow: isStacked ? 'auto' : 'hidden',
-        border: '1px solid var(--border-color)',
-        transition: 'var(--transition-smooth)',
-      }}
-    >
+  const InnerContent = (
+    <>
       <style>{`
         @keyframes optoFlowDash {
           to {
@@ -891,7 +963,104 @@ const FloorLayout = ({ tasks = [], config, onNavigate, optimization: sharedOptim
               </div>
             </div>
 
+            {/* Layout Presets Panel */}
+            <div className="glow-card" style={{ padding: '1rem', marginBottom: '1rem' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  marginBottom: '0.85rem',
+                  fontSize: '0.76rem',
+                  fontWeight: 900,
+                  color: 'var(--text-white)',
+                  letterSpacing: '1px',
+                }}
+              >
+                <Save size={15} />
+                LAYOUT PRESETS
+              </div>
 
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <input
+                    type="text"
+                    value={presetName}
+                    onChange={(e) => setPresetName(e.target.value)}
+                    placeholder="New preset name..."
+                    style={{
+                      flex: 1,
+                      background: 'var(--bg-secondary)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '0.5rem 0.65rem',
+                      fontSize: '0.7rem',
+                      color: 'var(--text-white)',
+                      outline: 'none',
+                    }}
+                  />
+                  <button
+                    onClick={handleSavePreset}
+                    disabled={!presetName.trim()}
+                    style={{
+                      background: presetName.trim() ? 'var(--accent-primary)' : 'var(--bg-secondary)',
+                      border: 'none',
+                      color: '#fff',
+                      padding: '0 0.8rem',
+                      borderRadius: 'var(--radius-sm)',
+                      cursor: presetName.trim() ? 'pointer' : 'not-allowed',
+                      fontSize: '0.65rem',
+                      fontWeight: 900,
+                    }}
+                  >
+                    SAVE
+                  </button>
+                </div>
+
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <select
+                    value={selectedPreset}
+                    onChange={(e) => setSelectedPreset(e.target.value)}
+                    style={{
+                      flex: 1,
+                      background: 'var(--bg-secondary)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '0.5rem 0.65rem',
+                      fontSize: '0.7rem',
+                      color: 'var(--text-white)',
+                      outline: 'none',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <option value="">-- Load a preset --</option>
+                    {Object.keys(config?.layout_presets || {}).map(p => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={handleLoadPreset}
+                    disabled={!selectedPreset}
+                    style={{
+                      background: selectedPreset ? 'var(--accent-secondary)' : 'var(--bg-secondary)',
+                      border: 'none',
+                      color: '#fff',
+                      padding: '0 0.8rem',
+                      borderRadius: 'var(--radius-sm)',
+                      cursor: selectedPreset ? 'pointer' : 'not-allowed',
+                      fontSize: '0.65rem',
+                      fontWeight: 900,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                  >
+                    <Download size={12} />
+                    LOAD
+                  </button>
+                </div>
+              </div>
+            </div>
 
             <div className="glow-card" style={{ padding: '1rem', marginBottom: '1rem' }}>
               <div
@@ -1123,32 +1292,18 @@ const FloorLayout = ({ tasks = [], config, onNavigate, optimization: sharedOptim
                 return (
                   <motion.div
                     key={`station-${station.idx}`}
-                    layout
-                    drag={!isSimulating}
-                    dragMomentum={false}
-                    dragElastic={snapToGrid ? 0.04 : 0.1}
-                    onPointerDown={(e) => e.stopPropagation()} // Stop propagation to prevent drag pan conflicts
-                    onDragStart={() => {
-                      setDraggingStationIdx(station.idx);
-                      setSelectedStationIdx(station.idx);
-                    }}
-                    onDragEnd={(_, info) => {
-                      setDraggingStationIdx(-1);
-                      handleDragEnd(station.idx, info);
-                    }}
-                    whileDrag={{
-                      scale: 1.03,
-                      boxShadow: '0 24px 45px rgba(13, 148, 136, 0.28)',
-                    }}                    onClick={(e) => {
+                    onPointerDown={(e) => handleStationPointerDown(station.idx, e)}
+                    onClick={(e) => {
                       e.stopPropagation();
                       setSelectedStationIdx(station.idx);
                     }}
                     animate={{
-                      left: station.renderX,
-                      top: station.renderY,
+                      left: station.renderX + (draggingStationIdx === station.idx ? liveDragDelta.x : 0),
+                      top: station.renderY + (draggingStationIdx === station.idx ? liveDragDelta.y : 0),
+                      scale: draggingStationIdx === station.idx ? 1.03 : 1,
                       borderColor: clearanceConflicts.has(station.idx) ? 'var(--accent-danger)' : isActive ? 'var(--accent-primary)' : isSelected ? 'var(--accent-warning)' : 'var(--border-color)',
                     }}
-                    transition={{ type: 'spring', stiffness: 340, damping: 32 }}
+                    transition={draggingStationIdx === station.idx ? { type: 'tween', duration: 0 } : { type: 'spring', stiffness: 340, damping: 32 }}
                     className={`glow-card ${clearanceConflicts.has(station.idx) ? 'opto-collision-pulse' : ''}`}
                     style={{
                       position: 'absolute',
@@ -1158,13 +1313,16 @@ const FloorLayout = ({ tasks = [], config, onNavigate, optimization: sharedOptim
                       overflow: 'hidden',
                       cursor: isSimulating ? 'default' : draggingStationIdx === station.idx ? 'grabbing' : 'grab',
                       zIndex: draggingStationIdx === station.idx ? 40 : isSelected ? 20 : 10,
-                      boxShadow: clearanceConflicts.has(station.idx)
-                        ? '0 0 15px rgba(239, 68, 68, 0.4)'
-                        : isSelected
-                          ? '0 20px 40px rgba(245, 158, 11, 0.16)'
-                          : isActive
-                            ? '0 20px 40px rgba(13, 148, 136, 0.18)'
-                            : 'var(--shadow-glow)',
+                      userSelect: 'none',
+                      boxShadow: draggingStationIdx === station.idx
+                        ? '0 24px 45px rgba(13, 148, 136, 0.28)'
+                        : clearanceConflicts.has(station.idx)
+                          ? '0 0 15px rgba(239, 68, 68, 0.4)'
+                          : isSelected
+                            ? '0 20px 40px rgba(245, 158, 11, 0.16)'
+                            : isActive
+                              ? '0 20px 40px rgba(13, 148, 136, 0.18)'
+                              : 'var(--shadow-glow)',
                     }}
                   >
                     {/* Safety Clearance Ring (1.2m radius / 100px) */}
@@ -1443,6 +1601,45 @@ const FloorLayout = ({ tasks = [], config, onNavigate, optimization: sharedOptim
 
         </div>
       </div>
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100%',
+          background: 'var(--bg-main)',
+          borderRadius: 'var(--radius-lg)',
+          overflow: isStacked ? 'auto' : 'hidden',
+          border: '1px solid var(--border-color)',
+          transition: 'var(--transition-smooth)',
+        }}
+      >
+        {InnerContent}
+      </div>
+    );
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        background: 'var(--bg-main)',
+        borderRadius: 'var(--radius-lg)',
+        overflow: isStacked ? 'auto' : 'hidden',
+        border: '1px solid var(--border-color)',
+        transition: 'var(--transition-smooth)',
+      }}
+    >
+      {InnerContent}
     </motion.div>
   );
 };

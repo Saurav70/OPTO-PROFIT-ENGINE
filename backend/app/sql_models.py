@@ -10,11 +10,10 @@ to keep the schema simple while still supporting rich payloads.
 
 import json
 from datetime import datetime, timezone
+from typing import Optional, List
 
-# pyrefly: ignore [missing-import]
 from sqlalchemy import (
     Boolean,
-    Column,
     DateTime,
     Float,
     ForeignKey,
@@ -23,8 +22,13 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
+import sqlalchemy.types as types
+import base64
+from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 # pyrefly: ignore [missing-import]
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, Mapped, mapped_column
 
 from .database import Base
 
@@ -34,33 +38,95 @@ def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+# ── Transparent Hardware-Locked Encryption ───────────────────────
+_fernet_instance = None
+
+def get_fernet():
+    global _fernet_instance
+    if _fernet_instance is None:
+        from .license import get_hardware_fingerprint
+        from .paths import get_persistent_salt_path
+        import uuid
+        
+        salt_path = get_persistent_salt_path()
+        if not salt_path.exists():
+            salt_path.parent.mkdir(parents=True, exist_ok=True)
+            salt_path.write_bytes(uuid.uuid4().bytes)
+        dynamic_salt = salt_path.read_bytes()
+
+        hwid = get_hardware_fingerprint().encode('utf-8')
+        kdf = PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=dynamic_salt,
+            iterations=600000,
+        )
+        key = base64.urlsafe_b64encode(kdf.derive(hwid))
+        _fernet_instance = Fernet(key)
+    return _fernet_instance
+
+class EncryptedString(types.TypeDecorator):
+    impl = types.String
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is not None:
+            return get_fernet().encrypt(value.encode('utf-8')).decode('utf-8')
+        return value
+
+    def process_result_value(self, value, dialect):
+        if value is not None:
+            try:
+                return get_fernet().decrypt(value.encode('utf-8')).decode('utf-8')
+            except Exception:
+                return value
+        return value
+
+class EncryptedText(types.TypeDecorator):
+    impl = types.Text
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is not None:
+            return get_fernet().encrypt(value.encode('utf-8')).decode('utf-8')
+        return value
+
+    def process_result_value(self, value, dialect):
+        if value is not None:
+            try:
+                return get_fernet().decrypt(value.encode('utf-8')).decode('utf-8')
+            except Exception:
+                return value
+        return value
+
+
 # ══════════════════════════════════════════════════════════════════
 #  Users
 # ══════════════════════════════════════════════════════════════════
 class UserDB(Base):
     __tablename__ = "users"
 
-    id = Column(String, primary_key=True)  # UUID-style string
-    username = Column(String(50), nullable=False)
-    username_normalized = Column(String(50), nullable=False, unique=True, index=True)
-    email = Column(String(254), nullable=True)
-    password_hash = Column(String(200), nullable=False)
-    created_at = Column(DateTime, default=_utc_now, nullable=False)
-    is_2fa_enabled = Column(Boolean, default=False)
-    two_factor_secret = Column(String(64), nullable=True)
-    full_name = Column(String(100), nullable=True)
-    phone_number = Column(String(20), nullable=True)
-    role = Column(String(50), default="User")
-    tenant_id = Column(String(20), nullable=True)
-    failed_login_attempts = Column(Integer, default=0)
-    locked_until = Column(DateTime, nullable=True)
+    id: Mapped[str] = mapped_column(String, primary_key=True)  # UUID-style string
+    username: Mapped[str] = mapped_column(String(50), nullable=False)
+    username_normalized: Mapped[str] = mapped_column(String(50), nullable=False, unique=True, index=True)
+    email: Mapped[Optional[str]] = mapped_column(EncryptedString(254), nullable=True)
+    password_hash: Mapped[str] = mapped_column(String(200), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utc_now, nullable=False)
+    is_2fa_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    two_factor_secret: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    full_name: Mapped[Optional[str]] = mapped_column(EncryptedString(100), nullable=True)
+    phone_number: Mapped[Optional[str]] = mapped_column(EncryptedString(20), nullable=True)
+    role: Mapped[str] = mapped_column(String(50), default="User")
+    tenant_id: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    failed_login_attempts: Mapped[int] = mapped_column(Integer, default=0)
+    locked_until: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Relationships
-    tasks = relationship("TaskDB", back_populates="user", cascade="all, delete-orphan")
-    sessions = relationship("SessionDB", back_populates="user", cascade="all, delete-orphan")
-    config = relationship("ConfigDB", back_populates="user", uselist=False, cascade="all, delete-orphan")
-    profiles = relationship("ProfileDB", back_populates="user", cascade="all, delete-orphan")
-    password_reset_tokens = relationship("PasswordResetTokenDB", back_populates="user", cascade="all, delete-orphan")
+    tasks: Mapped[List["TaskDB"]] = relationship("TaskDB", back_populates="user", cascade="all, delete-orphan")
+    sessions: Mapped[List["SessionDB"]] = relationship("SessionDB", back_populates="user", cascade="all, delete-orphan")
+    config: Mapped[Optional["ConfigDB"]] = relationship("ConfigDB", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    profiles: Mapped[List["ProfileDB"]] = relationship("ProfileDB", back_populates="user", cascade="all, delete-orphan")
+    password_reset_tokens: Mapped[List["PasswordResetTokenDB"]] = relationship("PasswordResetTokenDB", back_populates="user", cascade="all, delete-orphan")
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -69,13 +135,13 @@ class UserDB(Base):
 class SessionDB(Base):
     __tablename__ = "sessions"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    token_hash = Column(String(64), nullable=False, unique=True, index=True)
-    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    expires_at = Column(DateTime, nullable=False)
-    created_at = Column(DateTime, default=_utc_now, nullable=False)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utc_now, nullable=False)
 
-    user = relationship("UserDB", back_populates="sessions")
+    user: Mapped["UserDB"] = relationship("UserDB", back_populates="sessions")
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -84,17 +150,17 @@ class SessionDB(Base):
 class TaskDB(Base):
     __tablename__ = "tasks"
 
-    pk = Column(Integer, primary_key=True, autoincrement=True)
-    task_id = Column(String(50), nullable=False)        # User-facing ID (e.g. "A", "B")
-    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    tenant_id = Column(String(20), nullable=True, index=True)
-    name = Column(String(200), nullable=False)
-    time = Column(Float, nullable=False, default=0.0)
-    predecessors_json = Column(Text, default="[]")      # JSON-encoded list of task IDs
-    zoning = Column(String(100), default="None")
-    custom_attributes_json = Column(Text, default="{}") # JSON-encoded dict
+    pk: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    task_id: Mapped[str] = mapped_column(String(50), nullable=False)        # User-facing ID (e.g. "A", "B")
+    user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    tenant_id: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, index=True)
+    name: Mapped[str] = mapped_column(EncryptedString(200), nullable=False)
+    time: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    predecessors_json: Mapped[str] = mapped_column(EncryptedText, default="[]")      # JSON-encoded list of task IDs
+    zoning: Mapped[str] = mapped_column(String(100), default="None")
+    custom_attributes_json: Mapped[str] = mapped_column(EncryptedText, default="{}") # JSON-encoded dict
 
-    user = relationship("UserDB", back_populates="tasks")
+    user: Mapped["UserDB"] = relationship("UserDB", back_populates="tasks")
 
     __table_args__ = (
         UniqueConstraint("task_id", "user_id", name="uq_task_user"),
@@ -103,7 +169,7 @@ class TaskDB(Base):
     @property
     def predecessors(self) -> list:
         try:
-            return json.loads(self.predecessors_json or "[]")
+            return json.loads(str(self.predecessors_json or "[]"))
         except (json.JSONDecodeError, TypeError):
             return []
 
@@ -114,7 +180,7 @@ class TaskDB(Base):
     @property
     def custom_attributes(self) -> dict:
         try:
-            return json.loads(self.custom_attributes_json or "{}")
+            return json.loads(str(self.custom_attributes_json or "{}"))
         except (json.JSONDecodeError, TypeError):
             return {}
 
@@ -140,23 +206,35 @@ class TaskDB(Base):
 class ConfigDB(Base):
     __tablename__ = "config"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True)
-    tenant_id = Column(String(20), nullable=True, index=True)
-    data_json = Column(Text, nullable=False, default="{}")  # Full config dict as JSON
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True)
+    tenant_id: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, index=True)
+    data_json: Mapped[str] = mapped_column(EncryptedText, nullable=False, default="{}")  # Full config dict as JSON
+    layout_presets_json: Mapped[str] = mapped_column(EncryptedText, nullable=False, default="{}")
 
-    user = relationship("UserDB", back_populates="config")
+    user: Mapped["UserDB"] = relationship("UserDB", back_populates="config")
 
     @property
     def data(self) -> dict:
         try:
-            return json.loads(self.data_json or "{}")
+            return json.loads(str(self.data_json or "{}"))
         except (json.JSONDecodeError, TypeError):
             return {}
 
     @data.setter
     def data(self, value: dict):
         self.data_json = json.dumps(value)
+
+    @property
+    def layout_presets(self) -> dict:
+        try:
+            return json.loads(str(self.layout_presets_json or "{}"))
+        except (json.JSONDecodeError, TypeError):
+            return {}
+
+    @layout_presets.setter
+    def layout_presets(self, value: dict):
+        self.layout_presets_json = json.dumps(value)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -165,15 +243,15 @@ class ConfigDB(Base):
 class ProfileDB(Base):
     __tablename__ = "profiles"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    profile_id = Column(String(100), nullable=False)   # User-facing ID
-    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    tenant_id = Column(String(20), nullable=True, index=True)
-    name = Column(String(200), nullable=False)
-    data_json = Column(Text, nullable=False, default="{}")  # Full snapshot (tasks + config)
-    timestamp = Column(String(100), nullable=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    profile_id: Mapped[str] = mapped_column(String(100), nullable=False)   # User-facing ID
+    user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    tenant_id: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, index=True)
+    name: Mapped[str] = mapped_column(EncryptedString(200), nullable=False)
+    data_json: Mapped[str] = mapped_column(EncryptedText, nullable=False, default="{}")  # Full snapshot (tasks + config)
+    timestamp: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
-    user = relationship("UserDB", back_populates="profiles")
+    user: Mapped["UserDB"] = relationship("UserDB", back_populates="profiles")
 
     def to_dict(self) -> dict:
         data = self.data
@@ -188,7 +266,7 @@ class ProfileDB(Base):
     @property
     def data(self) -> dict:
         try:
-            return json.loads(self.data_json or "{}")
+            return json.loads(str(self.data_json or "{}"))
         except (json.JSONDecodeError, TypeError):
             return {}
 
@@ -203,11 +281,11 @@ class ProfileDB(Base):
 class PasswordResetTokenDB(Base):
     __tablename__ = "password_reset_tokens"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    token_hash = Column(String(64), nullable=False, unique=True, index=True)
-    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    created_at = Column(DateTime, default=_utc_now, nullable=False)
-    expires_at = Column(DateTime, nullable=False)
-    used_at = Column(DateTime, nullable=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utc_now, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    used_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
-    user = relationship("UserDB", back_populates="password_reset_tokens")
+    user: Mapped["UserDB"] = relationship("UserDB", back_populates="password_reset_tokens")
