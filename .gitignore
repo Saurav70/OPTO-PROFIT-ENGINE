@@ -54,3 +54,8 @@ backend/dist_obf/
 desktop/dist_obf/
 *.db-shm
 *.db-wal
+
+# Compiled Desktop Artifacts (use GitHub Releases instead)
+desktop/dist_backend/
+desktop/dist/
+desktop/node_modules/

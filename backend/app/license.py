@@ -20,6 +20,14 @@ PUBLIC_KEY_HEX = "4c8126b410dc10c94e66b2a2e8a251a8b4afe1185c0f269494ee2be75ecba5
 APP_DATA = Path(os.environ.get("APPDATA", Path.home())) / "OPTO-PROFIT"
 APP_DATA.mkdir(parents=True, exist_ok=True)
 LICENSE_PATH = APP_DATA / "license.dat"
+LICENSE_HMAC_PATH = APP_DATA / "license.hmac"
+
+
+def _compute_license_hmac(key_string: str, hwid: str) -> str:
+    """Compute HMAC-SHA256 of the license key string, keyed to this machine's HWID."""
+    import hmac as _hmac
+    secret = hashlib.sha256(f"LICENSE_INTEGRITY_{hwid}".encode()).digest()
+    return _hmac.new(secret, key_string.encode(), hashlib.sha256).hexdigest()
 
 
 @dataclass
@@ -108,7 +116,7 @@ def verify_license_key(key_string: str) -> LicensePayload | None:
 
 
 def get_license_status() -> dict:
-    """Check the stored license status."""
+    """Check the stored license status, verifying file integrity before parsing."""
     if not LICENSE_PATH.exists():
         return {
             "activated": False,
@@ -119,7 +127,21 @@ def get_license_status() -> dict:
     try:
         with open(LICENSE_PATH, "r") as f:
             key_string = f.read().strip()
-            
+
+        # ── HMAC Integrity Check ──────────────────────────────────────
+        # If a HMAC stamp exists, verify the file hasn't been tampered with.
+        if LICENSE_HMAC_PATH.exists():
+            import hmac as _hmac
+            stored_hmac = LICENSE_HMAC_PATH.read_text().strip()
+            expected_hmac = _compute_license_hmac(key_string, get_hardware_fingerprint())
+            if not _hmac.compare_digest(stored_hmac, expected_hmac):
+                logger.warning("License file integrity check failed — possible tampering detected.")
+                return {
+                    "activated": False,
+                    "error": "License file integrity check failed. Please re-activate.",
+                    "hwid": get_hardware_fingerprint()
+                }
+
         payload = verify_license_key(key_string)
         if payload:
             return {
@@ -144,14 +166,18 @@ def get_license_status() -> dict:
 
 
 def activate_license(key_string: str) -> dict:
-    """Activate the application with the given key string."""
+    """Activate the application with the given key string and stamp an HMAC for integrity."""
     payload = verify_license_key(key_string)
     if not payload:
         return {"success": False, "error": "Invalid, expired, or hardware-mismatched license key."}
-        
+
     try:
         with open(LICENSE_PATH, "w") as f:
             f.write(key_string)
+        # Write HMAC integrity stamp tied to this machine's HWID
+        hmac_stamp = _compute_license_hmac(key_string, get_hardware_fingerprint())
+        LICENSE_HMAC_PATH.write_text(hmac_stamp)
+        logger.info("License activated for %s (expires %s).", payload.licensee, payload.expires)
         return {"success": True, "licensee": payload.licensee, "expires": payload.expires}
     except Exception as e:
         return {"success": False, "error": f"Failed to save license key: {e}"}

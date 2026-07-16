@@ -35,13 +35,6 @@ if is_desktop_mode():
 else:
     DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./optoprofit.db")
 
-# SQLite needs check_same_thread=False when used with FastAPI's
-# threaded request handling (each request may land on a different thread).
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {},
-    echo=False,
-)
 
 def _get_encryption_key() -> str:
     """Generate a stable, secure 64-character hex key bound to this host machine's hardware ID."""
@@ -51,13 +44,59 @@ def _get_encryption_key() -> str:
     return hashlib.sha256(f"SQLCIPHER_{hwid}_SALT_9281".encode("utf-8")).hexdigest()
 
 
+# ── SQLCipher Engine Factory ──────────────────────────────────────
+# In a production PyInstaller build, sqlcipher3 is bundled. In dev mode,
+# we fall back to standard SQLite (Fernet column-level encryption still active).
+def _create_engine():
+    """Create a SQLAlchemy engine, using SQLCipher in production builds."""
+    _SQLCIPHER_AVAILABLE = False
+    try:
+        import sqlcipher3  # noqa: F401
+        _SQLCIPHER_AVAILABLE = True
+    except ImportError:
+        pass
+
+    if _SQLCIPHER_AVAILABLE and DATABASE_URL.startswith("sqlite"):
+        from sqlalchemy.dialects import registry
+        registry.load("sqlite")
+        from sqlcipher3 import dbapi2 as sqlcipher
+        _engine = create_engine(
+            DATABASE_URL.replace("sqlite://", "sqlite+sqlcipher://", 1),
+            connect_args={
+                "check_same_thread": False,
+                "creator": lambda: sqlcipher.connect(DATABASE_URL.replace("sqlite:///", ""))
+            },
+            echo=False,
+        )
+        import logging
+        logging.getLogger("optoprofit").info("SQLCipher encryption: ACTIVE")
+    else:
+        if not _SQLCIPHER_AVAILABLE:
+            import logging
+            logging.getLogger("optoprofit").warning(
+                "sqlcipher3 not installed — database stored in plaintext SQLite. "
+                "Install sqlcipher3-binary for encrypted storage in production."
+            )
+        _engine = create_engine(
+            DATABASE_URL,
+            connect_args={"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {},
+            echo=False,
+        )
+    return _engine
+
+
+engine = _create_engine()
+
+
 from sqlalchemy import event
 
 @event.listens_for(engine, "connect")
 def set_sqlite_pragma(dbapi_connection, connection_record):
     if DATABASE_URL.startswith("sqlite"):
         cursor = dbapi_connection.cursor()
-        # Set SQLCipher encryption key (will be ignored if SQLCipher support is not built-in)
+        # PRAGMA key: sets the SQLCipher encryption key.
+        # This is effective only when connected via the sqlcipher3 driver.
+        # With standard sqlite3, this is a no-op (unknown PRAGMA is silently ignored).
         key = _get_encryption_key()
         cursor.execute(f"PRAGMA key = '{key}'")
         cursor.execute("PRAGMA journal_mode=WAL")
