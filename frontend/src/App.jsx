@@ -15,6 +15,7 @@ import Login from './components/Login';
 import Register from './components/Register';
 import useEngineStore from './stores/useEngineStore';
 import LicenseActivation from './components/LicenseActivation';
+import DatabaseMigration from './components/DatabaseMigration';
 
 // Lazy-loaded components for performance
 const Welcome = lazy(() => import('./components/Welcome'));
@@ -73,6 +74,7 @@ const App = () => {
 
   const [isActivated, setIsActivated] = useState(false);
   const [isCheckingLicense, setIsCheckingLicense] = useState(true);
+  const [isMigrationRequired, setIsMigrationRequired] = useState(false);
 
   const [tasks, setTasks] = useState(() => { try { return savedTasks ? JSON.parse(savedTasks) : []; } catch { return []; } });
   const [config, setConfig] = useState(() => { try { return savedConfig ? JSON.parse(savedConfig) : {}; } catch { return {}; } });
@@ -439,11 +441,20 @@ const App = () => {
     const handleUnauthorized = () => {
       handleLogout();
     };
+    const handleMigration = () => {
+      setIsMigrationRequired(true);
+    };
     window.addEventListener('opto-unauthorized', handleUnauthorized);
+    window.addEventListener('opto-migration', handleMigration);
     return () => {
       window.removeEventListener('opto-unauthorized', handleUnauthorized);
+      window.removeEventListener('opto-migration', handleMigration);
     };
   }, [handleLogout]);
+
+  if (isMigrationRequired) {
+    return <DatabaseMigration onMigrationSuccess={() => window.location.reload()} />;
+  }
 
   if (!authChecked || isCheckingLicense) {
     return <SplashScreen />;

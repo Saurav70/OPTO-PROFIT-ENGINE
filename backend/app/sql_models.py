@@ -65,6 +65,25 @@ def get_fernet():
         _fernet_instance = Fernet(key)
     return _fernet_instance
 
+def get_old_fernet(old_hwid: str) -> Fernet:
+    """Derive the Fernet instance for the given old HWID."""
+    from .paths import get_persistent_salt_path
+    
+    salt_path = get_persistent_salt_path()
+    if not salt_path.exists():
+        raise RuntimeError("Salt file missing during migration.")
+    dynamic_salt = salt_path.read_bytes()
+
+    hwid_bytes = old_hwid.encode('utf-8')
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=dynamic_salt,
+        iterations=600000,
+    )
+    key = base64.urlsafe_b64encode(kdf.derive(hwid_bytes))
+    return Fernet(key)
+
 class EncryptedString(types.TypeDecorator):
     impl = types.String
     cache_ok = True

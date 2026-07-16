@@ -81,7 +81,7 @@ from .models import (
     TwoFactorSetupResponse,
     TwoFactorVerifyRequest
 )
-from .routers import analytics, healthcheck, collaboration
+from .routers import analytics, healthcheck, migration
 from .email_service import send_password_reset_email
 
 # ── Structured Logging ────────────────────────────────────────────
@@ -189,16 +189,21 @@ DEFAULT_CONFIG = {
     "target_efficiency": 85,
 }
 
+MIGRATION_REQUIRED = False
 
 # ── Lifespan (replaces deprecated on_event) ───────────────────────
 @asynccontextmanager
 async def lifespan(the_app: FastAPI):
+    global MIGRATION_REQUIRED
     # ── Startup: initialise SQLite database ──
     try:
-        init_db()
-        db_url = os.getenv("DATABASE_URL", "sqlite:///./optoprofit.db")
-        logger.info("SQLite database initialised — %s", db_url)
-        _purge_expired_sessions()
+        if not init_db():
+            logger.warning("DATABASE LOCKED: Hardware mismatch. Entering migration mode.")
+            MIGRATION_REQUIRED = True
+        else:
+            db_url = os.getenv("DATABASE_URL", "sqlite:///./optoprofit.db")
+            logger.info("SQLite database initialised — %s", db_url)
+            _purge_expired_sessions()
     except Exception as e:
         logger.error("=" * 80)
         logger.error("❌ DATABASE ERROR: Could not initialise SQLite.")
@@ -254,6 +259,20 @@ async def license_gate_middleware(request: Request, call_next):
             status_code=403,
             content={"detail": "License not activated", "license_status": status}
         )
+    return await call_next(request)
+
+
+# ── Migration Gate Middleware ──────────────────────────────────────
+@app.middleware("http")
+async def migration_gate_middleware(request: Request, call_next):
+    if MIGRATION_REQUIRED:
+        if request.url.path.startswith("/api/migration/"):
+            return await call_next(request)
+        if request.url.path.startswith("/api/"):
+            return JSONResponse(
+                status_code=503,
+                content={"detail": "MIGRATION_REQUIRED"}
+            )
     return await call_next(request)
 
 
@@ -314,8 +333,7 @@ app.add_middleware(
 
 app.include_router(analytics.router)
 app.include_router(healthcheck.router)
-app.include_router(collaboration.router)
-
+app.include_router(migration.router)
 
 def _normalize_username(username: str) -> str:
     return username.strip().lower()

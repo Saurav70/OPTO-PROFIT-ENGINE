@@ -45,6 +45,9 @@ const normalizeFailure = ({ error, response, url, method }) => {
     if (response.status === 401) {
       window.dispatchEvent(new CustomEvent('opto-unauthorized'));
     }
+    if (response.status === 503 && error?.detail === 'MIGRATION_REQUIRED') {
+      window.dispatchEvent(new CustomEvent('opto-migration'));
+    }
     const fallback = `Request failed with status ${response.status}`;
     const data = error;
     const message =

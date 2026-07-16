@@ -1,12 +1,12 @@
 # ==============================================================================
-# OPTO-PROFIT Desktop Build Script
+# OPTO-PROFIT Desktop Build Script (Electron)
 # ==============================================================================
 # Run this script once from the desktop\ directory to produce OPTO-PROFIT.exe
 #
 #   cd S:\OPTO-PROFIT\desktop
 #   .\build.ps1
 #
-# Output: S:\OPTO-PROFIT\desktop\dist\OPTO-PROFIT.exe
+# Output: S:\OPTO-PROFIT\desktop\dist\OPTO-PROFIT Setup 1.0.0.exe
 # ==============================================================================
 
 param (
@@ -25,7 +25,7 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
 # ── Step 1: Build React frontend (desktop mode) ───────────────────
-Write-Host "[1/5] Building React frontend (desktop mode)..." -ForegroundColor Yellow
+Write-Host "[1/6] Building React frontend (desktop mode)..." -ForegroundColor Yellow
 
 Push-Location $Frontend
 try {
@@ -37,7 +37,7 @@ try {
 Write-Host "      Frontend build complete." -ForegroundColor Green
 
 # ── Step 2: Copy dist into desktop app folder ─────────────────────
-Write-Host "[2/5] Copying frontend dist into desktop/app/dist..." -ForegroundColor Yellow
+Write-Host "[2/6] Copying frontend dist into desktop/app/dist..." -ForegroundColor Yellow
 
 $SrcDist = Join-Path $Frontend "dist"
 $DstDist = Join-Path $Desktop "app\dist"
@@ -47,7 +47,7 @@ Copy-Item $SrcDist $DstDist -Recurse -Force
 Write-Host "      dist/ copied successfully." -ForegroundColor Green
 
 # ── Step 3: Create Python virtual environment ─────────────────────
-Write-Host "[3/5] Setting up Python virtual environment..." -ForegroundColor Yellow
+Write-Host "[3/6] Setting up Python virtual environment..." -ForegroundColor Yellow
 
 $Venv = Join-Path $Desktop "venv"
 if (-not (Test-Path $Venv)) {
@@ -80,41 +80,66 @@ if (-not (Test-Path $PublicKey)) {
 Write-Host "      Python environment ready." -ForegroundColor Green
 
 # ── Step 4: Run PyInstaller ───────────────────────────────────────
-Write-Host "[4/5] Running PyInstaller to create OPTO-PROFIT.exe..." -ForegroundColor Yellow
+Write-Host "[4/6] Running PyInstaller to create backend.exe..." -ForegroundColor Yellow
 
 $PyInstaller = Join-Path $Venv "Scripts\pyinstaller.exe"
-$PyArmor = Join-Path $Venv "Scripts\pyarmor.exe"
 
 Push-Location $Desktop
 try {
-    Write-Host "      Copying source code to dist_obf (skipping PyArmor due to AppLocker)..." -ForegroundColor Cyan
+    Write-Host "      Copying source code to dist_obf..." -ForegroundColor Cyan
     if (Test-Path dist_obf) { Remove-Item -Recurse -Force dist_obf }
     New-Item -ItemType Directory -Path dist_obf | Out-Null
     Copy-Item -Recurse -Force app dist_obf\
-    Copy-Item -Force run.py dist_obf\
+    Copy-Item -Force run_backend.py dist_obf\
 
-    $SpecFile = if ($Debug) { "OPTO-PROFIT-DEBUG.spec" } else { "OPTO-PROFIT.spec" }
+    $SpecFile = "backend.spec"
     Write-Host "      Using spec file: $SpecFile" -ForegroundColor Cyan
-    # Run PyInstaller using our customized spec file that filters out system DLLs like COMCTL32.dll
     & $PyInstaller --noconfirm $SpecFile
 
     if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed" }
+    
+    # Move the backend.exe to a specific folder so electron-builder can find it easily
+    if (Test-Path dist_backend) { Remove-Item -Recurse -Force dist_backend }
+    New-Item -ItemType Directory -Path dist_backend | Out-Null
+    Copy-Item -Force dist\backend.exe dist_backend\
 } finally {
     Pop-Location
 }
 Write-Host "      PyInstaller complete." -ForegroundColor Green
 
-# ── Step 5: Done ──────────────────────────────────────────────────
-$ExePath = Join-Path $Desktop "dist\OPTO-PROFIT.exe"
+
+# ── Step 5: Install Electron Dependencies ───────────────────────────
+Write-Host "[5/6] Installing Electron dependencies..." -ForegroundColor Yellow
+Push-Location $Desktop
+try {
+    & npm.cmd install
+    if ($LASTEXITCODE -ne 0) { throw "npm install failed in desktop directory" }
+} finally {
+    Pop-Location
+}
+Write-Host "      Electron dependencies installed." -ForegroundColor Green
+
+# ── Step 6: Build Electron App ──────────────────────────────────────
+Write-Host "[6/6] Building final Electron Executable..." -ForegroundColor Yellow
+Push-Location $Desktop
+try {
+    & npm.cmd run dist
+    if ($LASTEXITCODE -ne 0) { throw "Electron build failed" }
+} finally {
+    Pop-Location
+}
+Write-Host "      Electron build complete." -ForegroundColor Green
+
+# ── Done ────────────────────────────────────────────────────────────
+$ExePath = Join-Path $Desktop "dist\OPTO-PROFIT Setup 1.0.0.exe"
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Green
 Write-Host "  BUILD SUCCESSFUL!" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "  Executable: $ExePath" -ForegroundColor White
-Write-Host "  Size:       $([math]::Round((Get-Item $ExePath).Length / 1MB, 1)) MB"
+Write-Host "  Installer: $ExePath" -ForegroundColor White
 Write-Host ""
-Write-Host "  Share OPTO-PROFIT.exe with anyone." -ForegroundColor Cyan
+Write-Host "  Share OPTO-PROFIT Setup with anyone." -ForegroundColor Cyan
 Write-Host "  Data is stored locally at:" -ForegroundColor Cyan
 Write-Host "  %APPDATA%\OPTO-PROFIT\data.db" -ForegroundColor Cyan
 Write-Host ""

@@ -46,6 +46,8 @@ def get_persistent_db_path() -> Path:
 
     app_dir = base / "OPTO-PROFIT"
     app_dir.mkdir(parents=True, exist_ok=True)
+    if os.environ.get("OPTO_E2E_TEST") == "1":
+        return app_dir / "optoprofit-test.db"
     return app_dir / "optoprofit.db"
 
 

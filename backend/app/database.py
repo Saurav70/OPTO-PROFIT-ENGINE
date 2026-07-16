@@ -71,35 +71,44 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 
-def init_db() -> None:
+def init_db() -> bool:
     """Create all tables that don't exist yet and execute SQLite migrations.
 
     Called once during FastAPI lifespan startup.
+    Returns True if successful, False if the database is locked (wrong hardware ID).
     """
     # Import sql_models so all ORM classes register with Base.metadata
     from . import sql_models  # noqa: F401
-    Base.metadata.create_all(bind=engine)
+    import sqlalchemy.exc
+    try:
+        Base.metadata.create_all(bind=engine)
 
-    # Dynamic SQLite migrations: add tenant_id if missing and backfill data.
-    # We use engine.begin() so SQLAlchemy auto-commits the transaction.
-    with engine.begin() as conn:
-        for table in ["tasks", "config", "profiles"]:
-            try:
-                # Retrieve existing columns using PRAGMA
-                cursor = conn.execute(text(f"PRAGMA table_info({table})"))
-                columns = [row[1] for row in cursor.fetchall()]
-                if "tenant_id" not in columns:
-                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN tenant_id VARCHAR(20)"))
-                    print(f"Schema Migration: Added tenant_id column to {table} table.")
-                
-                # Backfill tenant_id values by referencing user_id to user tenant_id
-                conn.execute(text(f"""
-                    UPDATE {table}
-                    SET tenant_id = (SELECT tenant_id FROM users WHERE users.id = {table}.user_id)
-                    WHERE tenant_id IS NULL
-                """))
-            except Exception as e:
-                print(f"Migration / Backfill failed for table {table}: {e}")
+        # Dynamic SQLite migrations: add tenant_id if missing and backfill data.
+        # We use engine.begin() so SQLAlchemy auto-commits the transaction.
+        with engine.begin() as conn:
+            for table in ["tasks", "config", "profiles"]:
+                try:
+                    # Retrieve existing columns using PRAGMA
+                    cursor = conn.execute(text(f"PRAGMA table_info({table})"))
+                    columns = [row[1] for row in cursor.fetchall()]
+                    if "tenant_id" not in columns:
+                        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN tenant_id VARCHAR(20)"))
+                        print(f"Schema Migration: Added tenant_id column to {table} table.")
+                    
+                    # Backfill tenant_id values by referencing user_id to user tenant_id
+                    conn.execute(text(f"""
+                        UPDATE {table}
+                        SET tenant_id = (SELECT tenant_id FROM users WHERE users.id = {table}.user_id)
+                        WHERE tenant_id IS NULL
+                    """))
+                except Exception as e:
+                    print(f"Migration / Backfill failed for table {table}: {e}")
+        return True
+    except (sqlalchemy.exc.DatabaseError, sqlalchemy.exc.OperationalError) as e:
+        if "file is not a database" in str(e).lower() or "encrypted" in str(e).lower():
+            print("Database encryption key mismatch. Migration required.")
+            return False
+        raise e
 
 
 def get_db():

@@ -32,6 +32,15 @@ def generate_ico():
     
     try:
         img = Image.open(logo_png)
+        
+        # Force square aspect ratio (256x256) to satisfy electron-builder requirements
+        if hasattr(Image, 'Resampling'):
+            resample = Image.Resampling.LANCZOS
+        else:
+            resample = Image.LANCZOS
+            
+        img = img.resize((256, 256), resample)
+        
         # Create sizes: 16x16, 32x32, 48x48, 64x64, 128x128, 256x256
         sizes = [(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
         

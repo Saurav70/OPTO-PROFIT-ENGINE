@@ -1,0 +1,19 @@
+{
+  "name": "opto-profit-desktop",
+  "version": "1.0.0",
+  "description": "OPTO-PROFIT Desktop Wrapper",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "test:e2e": "playwright test"
+  },
+  "author": "Antigravity AI",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "electron": "^30.0.0",
+    "electron-builder": "^24.13.3"
+  }
+}

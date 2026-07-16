@@ -1,0 +1,24 @@
+appId: com.optoprofit.app
+productName: OPTO-PROFIT
+directories:
+  output: dist
+  buildResources: build
+files:
+  - "main.js"
+  - "preload.js"
+  - "package.json"
+extraResources:
+  - from: "dist_backend/backend.exe"
+    to: "backend.exe"
+win:
+  target: nsis
+  icon: optoprofit_icon.ico
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  shortcutName: OPTO-PROFIT
+fileAssociations:
+  - ext: opto
+    name: OPTO-PROFIT Project File
+    role: Editor
+    description: OPTO-PROFIT Offline Project File

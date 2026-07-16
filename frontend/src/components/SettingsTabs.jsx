@@ -150,6 +150,24 @@ export const SecurityTab = ({ onLogout }) => {
   });
   const [status, setStatus] = useState({ type: '', message: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hwid, setHwid] = useState(null);
+  const [showHwid, setShowHwid] = useState(false);
+
+  React.useEffect(() => {
+    const fetchHwid = async () => {
+      try {
+        const res = await api.get('/api/license/hwid');
+        if (res && res.hwid) {
+          // Format as XXXX-XXXX-XXXX-XXXX
+          const formatted = res.hwid.match(/.{1,4}/g).join('-');
+          setHwid(formatted);
+        }
+      } catch (err) {
+        console.error('Failed to fetch HWID for recovery phrase', err);
+      }
+    };
+    fetchHwid();
+  }, []);
 
   const handleChange = (e) => {
     setPasswords({ ...passwords, [e.target.name]: e.target.value });
@@ -250,6 +268,50 @@ export const SecurityTab = ({ onLogout }) => {
               {isSubmitting ? 'UPDATING...' : 'UPDATE PASSWORD'}
             </span>
           </button>
+        </div>
+
+        <div style={{ height: '1px', background: 'var(--border-color)', margin: '1rem 0' }} />
+
+        {/* Recovery Phrase Section */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+          <h4 style={{ margin: 0, color: 'var(--text-sub)', fontSize: '0.85rem', fontWeight: 700, letterSpacing: '1px' }}>DATABASE RECOVERY PHRASE</h4>
+          <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-sub)' }}>
+            Your database is cryptographically locked to this computer. Write down this Recovery Phrase. You will need it if you ever move your database file to a new computer.
+          </p>
+          
+          <div style={{
+            background: 'rgba(0,0,0,0.2)',
+            border: '1px dashed var(--border-color)',
+            padding: '1rem',
+            borderRadius: '8px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1rem'
+          }}>
+            <button 
+              onClick={() => setShowHwid(!showHwid)}
+              className="btn-outline"
+              style={{ alignSelf: 'flex-start', padding: '0.4rem 0.8rem', fontSize: '0.75rem' }}
+            >
+              {showHwid ? 'HIDE RECOVERY PHRASE' : 'REVEAL RECOVERY PHRASE'}
+            </button>
+            
+            {showHwid && hwid && (
+              <div style={{
+                fontFamily: 'monospace',
+                fontSize: '1.2rem',
+                color: 'var(--text-white)',
+                letterSpacing: '2px',
+                textAlign: 'center',
+                padding: '1rem',
+                background: 'rgba(255,255,255,0.05)',
+                borderRadius: '8px',
+                userSelect: 'all'
+              }}>
+                {hwid}
+              </div>
+            )}
+          </div>
         </div>
 
         <div style={{ height: '1px', background: 'var(--border-color)', margin: '1rem 0' }} />
