@@ -8,7 +8,7 @@ import os
 import secrets
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 import bcrypt
 from jose import jwt, JWTError
@@ -252,9 +252,18 @@ def get_current_user(
         )
 
     import typing
-    user: typing.Any = db.query(UserDB).filter(
-        (UserDB.email == email) | (UserDB.username_normalized == email.strip().lower())
-    ).first()
+    user: typing.Any = None
+    # ── Ported fix (Segment 1): resolve by the user_id claim embedded in tokens
+    # created by create_session(). The email column is Fernet-encrypted with a
+    # random IV and can never be matched in SQL, so email equality filters are
+    # dead code — legacy tokens fall back to username_normalized matching.
+    user_id_claim = payload.get("user_id")
+    if user_id_claim:
+        user = db.query(UserDB).filter(UserDB.id == user_id_claim).first()
+    if user is None:
+        user = db.query(UserDB).filter(
+            UserDB.username_normalized == email.strip().lower()
+        ).first()
 
     if not user:
         raise HTTPException(

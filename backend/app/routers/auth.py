@@ -212,6 +212,13 @@ async def login(request: Request, response: Response, db: Session = Depends(get_
         user_row.locked_until = None
         db.commit()
 
+    # ── Ported fix (Segment 6): lazily drop this user's expired sessions on login ──
+    db.query(SessionDB).filter(
+        SessionDB.user_id == user_row.id,
+        SessionDB.expires_at < now_utc,
+    ).delete()
+    db.commit()
+
     if user_row.is_2fa_enabled:
         temp_token = _create_session_impl(db, user_row.id, is_2fa_temp=True)
         set_auth_cookie(response, temp_token, is_2fa_temp=True)
@@ -308,6 +315,22 @@ def change_password(
     return {"message": "Password updated successfully"}
 
 
+def _find_user_by_email(db: Session, email: str) -> UserDB | None:
+    """Find a user by email address (ported fix — Segment 1).
+
+    The email column is Fernet-encrypted with a random IV, so equality/ILIKE
+    filters can never match in SQL. Fetch candidates and compare decrypted
+    values in Python instead — the users table is tiny in this local-desktop
+    deployment, so a full scan is negligible.
+    """
+    email_normalized = email.strip().lower()
+    for user_row in db.query(UserDB).all():
+        stored = user_row.email
+        if stored and stored.strip().lower() == email_normalized:
+            return user_row
+    return None
+
+
 @router.post("/api/auth/forgot-password")
 @limiter.limit("3/minute")
 def forgot_password(
@@ -316,13 +339,13 @@ def forgot_password(
     db: Session = Depends(get_db),
 ):
     email = payload.email.strip()
-    user = db.query(UserDB).filter(UserDB.email.ilike(email.lower())).first()
+    user = _find_user_by_email(db, email)
     generic_message = "If this email is registered, a password reset link has been sent."
     if not user:
         return {"message": generic_message}
     reset_token = _create_password_reset_token_impl(db, user.id)
     sent = send_password_reset_email(
-        to_email=email, reset_token=reset_token,
+        to_email=user.email or email, reset_token=reset_token,
         frontend_origin="http://localhost:5173",
     )
     if not sent:
