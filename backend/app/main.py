@@ -4,6 +4,7 @@ OPTO-PROFIT API — Application Bootstrap
 This file wires together the FastAPI app, middleware, and routers.
 All endpoint logic lives in the routers/ package.
 """
+import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -58,6 +59,7 @@ MIGRATION_REQUIRED = False
 @asynccontextmanager
 async def lifespan(the_app: FastAPI):
     global MIGRATION_REQUIRED
+    purge_task = None
     try:
         if not init_db():
             logger.warning("DATABASE LOCKED: Hardware mismatch. Entering migration mode.")
@@ -66,6 +68,9 @@ async def lifespan(the_app: FastAPI):
             db_url = os.getenv("DATABASE_URL", "sqlite:///./optoprofit.db")
             logger.info("SQLite database initialised — %s", db_url)
             _purge_expired_sessions()
+            # Ported fix (Segment 6): periodic expired-session purge so
+            # long-running desktop sessions don't accumulate stale rows.
+            purge_task = asyncio.create_task(_periodic_session_purge())
     except Exception as e:
         logger.error("=" * 80)
         logger.error("❌ DATABASE ERROR: Could not initialise SQLite.")
@@ -73,7 +78,31 @@ async def lifespan(the_app: FastAPI):
         logger.error("=" * 80)
         raise SystemExit("\nError: Could not initialise the SQLite database during server startup.\n")
     yield
+    if purge_task is not None:
+        purge_task.cancel()
+        try:
+            await purge_task
+        except asyncio.CancelledError:
+            pass
     logger.info("Application shutting down.")
+
+
+# Ported fix (Segment 6): purge expired sessions every 6 hours.
+PURGE_INTERVAL_SECONDS = 6 * 60 * 60
+
+
+async def _periodic_session_purge() -> None:
+    """Background loop — purge expired sessions every 6 hours.
+
+    Complements the startup-only purge so expired sessions are cleaned up
+    during long-running desktop sessions without an app restart.
+    """
+    while True:
+        await asyncio.sleep(PURGE_INTERVAL_SECONDS)
+        try:
+            await asyncio.to_thread(_purge_expired_sessions)
+        except Exception as exc:
+            logger.warning("Periodic session purge failed: %s", exc)
 
 
 def _purge_expired_sessions() -> None:

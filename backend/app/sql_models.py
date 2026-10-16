@@ -156,8 +156,8 @@ class SessionDB(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
-    user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)  # Ported fix (Segment 4/6): indexed for login-time lazy purge
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)  # Ported fix (Segment 4/6): indexed for the periodic purge
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utc_now, nullable=False)
 
     user: Mapped["UserDB"] = relationship("UserDB", back_populates="sessions")

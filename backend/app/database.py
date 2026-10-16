@@ -142,6 +142,15 @@ def init_db() -> bool:
                     """))
                 except Exception as e:
                     print(f"Migration / Backfill failed for table {table}: {e}")
+
+        # Ported fix (Segment 6): session hygiene indexes — speed up login-time
+        # lazy purge and periodic expired-session cleanup. Idempotent on SQLite.
+        try:
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sessions_user_id ON sessions (user_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sessions_expires_at ON sessions (expires_at)"))
+            print("Schema check: session purge indexes present (sessions.user_id, sessions.expires_at).")
+        except Exception as e:
+            print(f"Migration failed for session purge indexes: {e}")
         return True
     except (sqlalchemy.exc.DatabaseError, sqlalchemy.exc.OperationalError) as e:
         if "file is not a database" in str(e).lower() or "encrypted" in str(e).lower():
