@@ -57,6 +57,14 @@ def get_tasks(current_user: User = Depends(get_current_user), db: Session = Depe
 def replace_tasks(tasks: List[Task], current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     user_id = current_user.id
     tenant_id = current_user.tenant_id
+
+    # Ported fix (Segment 2): reject duplicate task ids inside the payload —
+    # they would violate UNIQUE(task_id, user_id) during the delete+reinsert
+    # and surface as a raw 500.
+    payload_ids = [t.id for t in tasks]
+    if len(payload_ids) != len(set(payload_ids)):
+        raise HTTPException(status_code=400, detail="Duplicate task ids in payload")
+
     if tenant_id:
         db.query(TaskDB).filter(TaskDB.tenant_id == tenant_id).delete()
     else:
@@ -75,8 +83,22 @@ def replace_tasks(tasks: List[Task], current_user: User = Depends(get_current_us
 
 @router.post("/api/tasks", response_model=Task)
 def create_task(task: Task, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    user_id = current_user.id
+    tenant_id = current_user.tenant_id
+
+    # Ported fix (Segment 2): friendly 409 instead of a raw IntegrityError 500
+    # when the task id already exists for this user or tenant
+    # (UNIQUE(task_id, user_id)).
+    existing = None
+    if tenant_id:
+        existing = db.query(TaskDB).filter(TaskDB.task_id == task.id, TaskDB.tenant_id == tenant_id).first()
+    if not existing:
+        existing = db.query(TaskDB).filter(TaskDB.task_id == task.id, TaskDB.user_id == user_id).first()
+    if existing:
+        raise HTTPException(status_code=409, detail=f"Task id '{task.id}' already exists")
+
     db.add(TaskDB(
-        task_id=task.id, user_id=current_user.id, tenant_id=current_user.tenant_id,
+        task_id=task.id, user_id=user_id, tenant_id=tenant_id,
         name=task.name, time=task.time,
         predecessors_json=json.dumps(task.predecessors),
         zoning=task.zoning or "None",
