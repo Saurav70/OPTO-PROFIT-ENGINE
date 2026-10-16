@@ -9,6 +9,7 @@ to keep the schema simple while still supporting rich payloads.
 """
 
 import json
+import logging
 from datetime import datetime, timezone
 from typing import Optional, List
 
@@ -84,6 +85,21 @@ def get_old_fernet(old_hwid: str) -> Fernet:
     key = base64.urlsafe_b64encode(kdf.derive(hwid_bytes))
     return Fernet(key)
 
+
+def _log_decrypt_failure() -> None:
+    """Ported fix (Segment 3): make decryption failures loud instead of silent.
+
+    A failure almost always means the row was encrypted with a different
+    hardware ID or the installation_salt.key is missing/changed (machine
+    migrated). Returning the raw value keeps legacy/plaintext rows readable
+    while making the problem visible in logs.
+    """
+    logging.getLogger("optoprofit.crypto").error(
+        "Decryption failed for an encrypted column value — the row was likely "
+        "encrypted with a different hardware ID or a missing/changed "
+        "installation_salt.key (machine migrated?). Returning the raw value."
+    )
+
 class EncryptedString(types.TypeDecorator):
     impl = types.String
     cache_ok = True
@@ -98,6 +114,7 @@ class EncryptedString(types.TypeDecorator):
             try:
                 return get_fernet().decrypt(value.encode('utf-8')).decode('utf-8')
             except Exception:
+                _log_decrypt_failure()
                 return value
         return value
 
@@ -115,6 +132,7 @@ class EncryptedText(types.TypeDecorator):
             try:
                 return get_fernet().decrypt(value.encode('utf-8')).decode('utf-8')
             except Exception:
+                _log_decrypt_failure()
                 return value
         return value
 
@@ -132,7 +150,7 @@ class UserDB(Base):
     password_hash: Mapped[str] = mapped_column(String(200), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utc_now, nullable=False)
     is_2fa_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
-    two_factor_secret: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    two_factor_secret: Mapped[Optional[str]] = mapped_column(EncryptedString(255), nullable=True)  # Ported fix (Segment 3): encrypt at rest (Fernet tokens ~121 chars — SQLite ignores length, 255 keeps the declaration honest)
     full_name: Mapped[Optional[str]] = mapped_column(EncryptedString(100), nullable=True)
     phone_number: Mapped[Optional[str]] = mapped_column(EncryptedString(20), nullable=True)
     role: Mapped[str] = mapped_column(String(50), default="User")
