@@ -2,7 +2,6 @@ import hashlib
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import create_engine, text
-import app.main as main_app
 from app.database import DATABASE_URL
 from app.sql_models import (
     get_old_fernet, get_fernet, UserDB, TaskDB, ConfigDB, ProfileDB, SessionDB, PasswordResetTokenDB
@@ -20,6 +19,10 @@ def _derive_sqlcipher_key(hwid: str) -> str:
 
 @router.post("/unlock")
 def unlock_database(payload: MigrationUnlockRequest):
+    # Lazy import — app.main imports this router at startup, so a module-level
+    # import here would be circular (importing app.routers.* directly breaks).
+    import app.main as main_app
+
     if not main_app.MIGRATION_REQUIRED:
         raise HTTPException(status_code=400, detail="Migration is not currently required.")
 

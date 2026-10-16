@@ -143,20 +143,63 @@ def init_db() -> bool:
                 except Exception as e:
                     print(f"Migration / Backfill failed for table {table}: {e}")
 
-        # Ported fix (Segment 6): session hygiene indexes — speed up login-time
-        # lazy purge and periodic expired-session cleanup. Idempotent on SQLite.
-        try:
-            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sessions_user_id ON sessions (user_id)"))
-            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sessions_expires_at ON sessions (expires_at)"))
-            print("Schema check: session purge indexes present (sessions.user_id, sessions.expires_at).")
-        except Exception as e:
-            print(f"Migration failed for session purge indexes: {e}")
+            # Ported fix (Segment 6): session hygiene indexes — speed up login-time
+            # lazy purge and periodic expired-session cleanup. Idempotent on SQLite.
+            try:
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sessions_user_id ON sessions (user_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sessions_expires_at ON sessions (expires_at)"))
+                print("Schema check: session purge indexes present (sessions.user_id, sessions.expires_at).")
+            except Exception as e:
+                print(f"Migration failed for session purge indexes: {e}")
+
+        # Ported fix (Segment 4): apply (or stamp) Alembic versioned migrations.
+        _run_alembic_migrations()
         return True
     except (sqlalchemy.exc.DatabaseError, sqlalchemy.exc.OperationalError) as e:
         if "file is not a database" in str(e).lower() or "encrypted" in str(e).lower():
             print("Database encryption key mismatch. Migration required.")
             return False
         raise e
+
+
+def _run_alembic_migrations() -> None:
+    """Ported fix (Segment 4): apply pending Alembic migrations, or stamp
+    existing databases.
+
+    - Databases created by create_all() (no alembic_version table yet) are
+      stamped to head — their schema already matches the ORM models.
+    - Databases that already carry an alembic_version table get
+      `upgrade head`, applying any new versioned migrations added later.
+    Runs through the application engine, so SQLCipher-encrypted databases
+    are handled by the same driver/PRAGMA wiring the app uses.
+    """
+    try:
+        import pathlib
+
+        from alembic import command
+        from alembic.config import Config
+
+        ini_path = pathlib.Path(__file__).resolve().parent.parent / "alembic.ini"
+        if not ini_path.exists():
+            print("Alembic: alembic.ini not found — skipping versioned migrations.")
+            return
+
+        alembic_cfg = Config(str(ini_path))
+        alembic_cfg.set_main_option("script_location", str(ini_path.parent / "alembic"))
+
+        with engine.connect() as conn:
+            has_version_table = conn.execute(text(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='alembic_version'"
+            )).first() is not None
+
+        if has_version_table:
+            command.upgrade(alembic_cfg, "head")
+            print("Alembic: applied pending migrations (upgrade head).")
+        else:
+            command.stamp(alembic_cfg, "head")
+            print("Alembic: existing schema stamped to head.")
+    except Exception as e:
+        print(f"Alembic migration failed: {e}")
 
 
 def get_db():
